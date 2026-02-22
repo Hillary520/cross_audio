@@ -55,7 +55,6 @@ class PlatformPlayerEngine(
     DrmEngine,
     AudioProcessingEngine,
     TelemetryEngine {
-
     private val tag = "PlatformPlayerEngine"
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -116,21 +115,10 @@ class PlatformPlayerEngine(
 
     override fun setQueue(items: List<MediaItem>, startIndex: Int) = delegate.setQueue(items, startIndex)
 
-    override fun addToQueue(items: List<MediaItem>, atIndex: Int?) {
-        (delegate as? QueueMutableEngine)?.addToQueue(items, atIndex)
-    }
-
-    override fun removeFromQueue(indices: IntArray) {
-        (delegate as? QueueMutableEngine)?.removeFromQueue(indices)
-    }
-
-    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
-        (delegate as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
-    }
-
-    override fun clearQueue() {
-        (delegate as? QueueMutableEngine)?.clearQueue()
-    }
+    override fun addToQueue(items: List<MediaItem>, atIndex: Int?) { (delegate as? QueueMutableEngine)?.addToQueue(items, atIndex) }
+    override fun removeFromQueue(indices: IntArray) { (delegate as? QueueMutableEngine)?.removeFromQueue(indices) }
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) { (delegate as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex) }
+    override fun clearQueue() { (delegate as? QueueMutableEngine)?.clearQueue() }
 
     override fun play() {
         pausedForFocusLoss = false
@@ -160,97 +148,33 @@ class PlatformPlayerEngine(
     override fun setCrossfadeDurationMs(durationMs: Long) = delegate.setCrossfadeDurationMs(durationMs)
     override fun setRepeatMode(mode: RepeatMode) = delegate.setRepeatMode(mode)
 
-    override fun setShuffleEnabled(enabled: Boolean) {
-        (delegate as? ShuffleEngine)?.setShuffleEnabled(enabled)
-    }
-
-    override fun isShuffleEnabled(): Boolean {
-        return (delegate as? ShuffleEngine)?.isShuffleEnabled() == true
-    }
+    override fun setShuffleEnabled(enabled: Boolean) { (delegate as? ShuffleEngine)?.setShuffleEnabled(enabled) }
+    override fun isShuffleEnabled(): Boolean = (delegate as? ShuffleEngine)?.isShuffleEnabled() == true
 
     override fun setVolume(volume: Float) {
         desiredVolume = volume.coerceIn(0f, 1f)
         if (!ducked) delegate.setVolume(desiredVolume)
     }
 
-    override fun setCrossfadeDebugPanning(enabled: Boolean) {
-        (delegate as? DebugControls)?.setCrossfadeDebugPanning(enabled)
-    }
-
-    override fun setCrossfadeHeadroom(headroom: Float) {
-        (delegate as? DebugControls)?.setCrossfadeHeadroom(headroom)
-    }
-
-    override fun setCacheConfig(config: CacheConfig) {
-        (delegate as? CacheEngine)?.setCacheConfig(config)
-    }
-
-    override fun pinForOffline(item: MediaItem) {
-        (delegate as? CacheEngine)?.pinForOffline(item)
-    }
-
-    override fun unpinOffline(item: MediaItem) {
-        (delegate as? CacheEngine)?.unpinOffline(item)
-    }
-
-    override fun pinCacheGroup(cacheGroupKey: String) {
-        (delegate as? CacheEngine)?.pinCacheGroup(cacheGroupKey)
-    }
-
-    override fun unpinCacheGroup(cacheGroupKey: String) {
-        (delegate as? CacheEngine)?.unpinCacheGroup(cacheGroupKey)
-    }
-
-    override fun evictCacheGroup(cacheGroupKey: String) {
-        (delegate as? CacheEngine)?.evictCacheGroup(cacheGroupKey)
-    }
-
-    override fun clearUnpinnedCache() {
-        (delegate as? CacheEngine)?.clearUnpinnedCache()
-    }
-
-    override fun cacheInfo(item: MediaItem): CacheInfo {
-        return (delegate as? CacheEngine)?.cacheInfo(item)
-            ?: CacheInfo(item.cacheKey ?: item.uri.toString(), CacheState.MISS, 0L, false)
-    }
-
-    override fun setStreamingConfig(config: StreamingConfig) {
-        (delegate as? AdaptiveStreamingEngine)?.setStreamingConfig(config)
-    }
-
-    override fun setQualityCap(cap: QualityCap) {
-        (delegate as? AdaptiveStreamingEngine)?.setQualityCap(cap)
-    }
-
-    override fun currentQuality(): QualityInfo {
-        return (delegate as? AdaptiveStreamingEngine)?.currentQuality()
-            ?: QualityInfo(sourceType = com.crossaudio.engine.SourceType.PROGRESSIVE)
-    }
-
-    override fun preloadManifest(item: MediaItem) {
-        (delegate as? AdaptiveStreamingEngine)?.preloadManifest(item)
-    }
-
-    override fun setDrmConfig(config: DrmGlobalConfig) {
-        (delegate as? DrmEngine)?.setDrmConfig(config)
-    }
-
-    override fun acquireOfflineLicense(item: MediaItem): OfflineLicenseResult {
-        return (delegate as? DrmEngine)?.acquireOfflineLicense(item)
-            ?: OfflineLicenseResult.Failure("DRM engine unavailable")
-    }
-
-    override fun releaseOfflineLicense(licenseId: String) {
-        (delegate as? DrmEngine)?.releaseOfflineLicense(licenseId)
-    }
-
-    override fun setAudioProcessing(config: AudioProcessingConfig) {
-        (delegate as? AudioProcessingEngine)?.setAudioProcessing(config)
-    }
-
-    override fun telemetrySnapshot(): EngineTelemetrySnapshot {
-        return (delegate as? TelemetryEngine)?.telemetrySnapshot() ?: EngineTelemetrySnapshot()
-    }
+    override fun setCrossfadeDebugPanning(enabled: Boolean) { (delegate as? DebugControls)?.setCrossfadeDebugPanning(enabled) }
+    override fun setCrossfadeHeadroom(headroom: Float) { (delegate as? DebugControls)?.setCrossfadeHeadroom(headroom) }
+    override fun setCacheConfig(config: CacheConfig) { (delegate as? CacheEngine)?.setCacheConfig(config) }
+    override fun pinForOffline(item: MediaItem) { (delegate as? CacheEngine)?.pinForOffline(item) }
+    override fun unpinOffline(item: MediaItem) { (delegate as? CacheEngine)?.unpinOffline(item) }
+    override fun pinCacheGroup(cacheGroupKey: String) { (delegate as? CacheEngine)?.pinCacheGroup(cacheGroupKey) }
+    override fun unpinCacheGroup(cacheGroupKey: String) { (delegate as? CacheEngine)?.unpinCacheGroup(cacheGroupKey) }
+    override fun evictCacheGroup(cacheGroupKey: String) { (delegate as? CacheEngine)?.evictCacheGroup(cacheGroupKey) }
+    override fun clearUnpinnedCache() { (delegate as? CacheEngine)?.clearUnpinnedCache() }
+    override fun cacheInfo(item: MediaItem): CacheInfo = (delegate as? CacheEngine)?.cacheInfo(item) ?: CacheInfo(item.cacheKey ?: item.uri.toString(), CacheState.MISS, 0L, false)
+    override fun setStreamingConfig(config: StreamingConfig) { (delegate as? AdaptiveStreamingEngine)?.setStreamingConfig(config) }
+    override fun setQualityCap(cap: QualityCap) { (delegate as? AdaptiveStreamingEngine)?.setQualityCap(cap) }
+    override fun currentQuality(): QualityInfo = (delegate as? AdaptiveStreamingEngine)?.currentQuality() ?: QualityInfo(sourceType = com.crossaudio.engine.SourceType.PROGRESSIVE)
+    override fun preloadManifest(item: MediaItem) { (delegate as? AdaptiveStreamingEngine)?.preloadManifest(item) }
+    override fun setDrmConfig(config: DrmGlobalConfig) { (delegate as? DrmEngine)?.setDrmConfig(config) }
+    override fun acquireOfflineLicense(item: MediaItem): OfflineLicenseResult = (delegate as? DrmEngine)?.acquireOfflineLicense(item) ?: OfflineLicenseResult.Failure("DRM engine unavailable")
+    override fun releaseOfflineLicense(licenseId: String) { (delegate as? DrmEngine)?.releaseOfflineLicense(licenseId) }
+    override fun setAudioProcessing(config: AudioProcessingConfig) { (delegate as? AudioProcessingEngine)?.setAudioProcessing(config) }
+    override fun telemetrySnapshot(): EngineTelemetrySnapshot = (delegate as? TelemetryEngine)?.telemetrySnapshot() ?: EngineTelemetrySnapshot()
 
     override fun release() {
         delegate.release()

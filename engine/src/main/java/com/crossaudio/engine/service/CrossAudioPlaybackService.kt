@@ -44,15 +44,11 @@ import kotlinx.coroutines.launch
  */
 class CrossAudioPlaybackService : Service() {
     class Binder internal constructor(val service: CrossAudioPlaybackService) : android.os.Binder()
-
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-
     internal lateinit var session: MediaSessionCompat
     internal lateinit var notificationManager: NotificationManager
-
     internal val core by lazy { CrossAudioEngine(this) }
     internal val engine by lazy { PlatformPlayerEngine(this, core) }
-
     internal var isForeground = false
     internal var lastNotifKind: String? = null
     internal var lastNotifItemKey: String? = null
@@ -123,97 +119,31 @@ class CrossAudioPlaybackService : Service() {
         }
     }
 
-    override fun onBind(intent: Intent): IBinder {
-        return Binder(this)
-    }
-
-    fun setQueue(items: List<MediaItem>, startIndex: Int = 0) {
-        engine.setQueue(items, startIndex)
-    }
-
-    fun addToQueue(items: List<MediaItem>, atIndex: Int? = null) {
-        (engine as? QueueMutableEngine)?.addToQueue(items, atIndex)
-    }
-
-    fun removeFromQueue(indices: IntArray) {
-        (engine as? QueueMutableEngine)?.removeFromQueue(indices)
-    }
-
-    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
-        (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
-    }
-
-    fun clearQueue() {
-        (engine as? QueueMutableEngine)?.clearQueue()
-    }
-
-    fun setShuffleEnabled(enabled: Boolean) {
-        (engine as? ShuffleEngine)?.setShuffleEnabled(enabled)
-    }
-
-    fun isShuffleEnabled(): Boolean {
-        return (engine as? ShuffleEngine)?.isShuffleEnabled() == true
-    }
-
-    fun pinForOffline(item: MediaItem) {
-        (engine as? CacheEngine)?.pinForOffline(item)
-    }
-
-    fun unpinOffline(item: MediaItem) {
-        (engine as? CacheEngine)?.unpinOffline(item)
-    }
-
-    fun pinCacheGroup(cacheGroupKey: String) {
-        (engine as? CacheEngine)?.pinCacheGroup(cacheGroupKey)
-    }
-
-    fun unpinCacheGroup(cacheGroupKey: String) {
-        (engine as? CacheEngine)?.unpinCacheGroup(cacheGroupKey)
-    }
-
-    fun evictCacheGroup(cacheGroupKey: String) {
-        (engine as? CacheEngine)?.evictCacheGroup(cacheGroupKey)
-    }
-
-    fun clearUnpinnedCache() {
-        (engine as? CacheEngine)?.clearUnpinnedCache()
-    }
-
-    fun setStreamingConfig(config: StreamingConfig) {
-        (engine as? AdaptiveStreamingEngine)?.setStreamingConfig(config)
-    }
-
-    fun setQualityCap(cap: QualityCap) {
-        (engine as? AdaptiveStreamingEngine)?.setQualityCap(cap)
-    }
-
-    fun preloadManifest(item: MediaItem) {
-        (engine as? AdaptiveStreamingEngine)?.preloadManifest(item)
-    }
-
-    fun setDrmConfig(config: DrmGlobalConfig) {
-        (engine as? DrmEngine)?.setDrmConfig(config)
-    }
-
-    fun acquireOfflineLicense(item: MediaItem): OfflineLicenseResult {
-        return (engine as? DrmEngine)?.acquireOfflineLicense(item)
-            ?: OfflineLicenseResult.Failure("DRM engine unavailable")
-    }
-
-    fun releaseOfflineLicense(licenseId: String) {
-        (engine as? DrmEngine)?.releaseOfflineLicense(licenseId)
-    }
-
-    fun cacheInfo(item: MediaItem): CacheInfo {
-        return (engine as? CacheEngine)?.cacheInfo(item)
-            ?: CacheInfo(item.cacheKey ?: item.uri.toString(), CacheState.MISS, 0L, false)
-    }
+    override fun onBind(intent: Intent): IBinder = Binder(this)
+    fun setQueue(items: List<MediaItem>, startIndex: Int = 0) = engine.setQueue(items, startIndex)
+    fun addToQueue(items: List<MediaItem>, atIndex: Int? = null) = (engine as? QueueMutableEngine)?.addToQueue(items, atIndex)
+    fun removeFromQueue(indices: IntArray) = (engine as? QueueMutableEngine)?.removeFromQueue(indices)
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) = (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
+    fun clearQueue() = (engine as? QueueMutableEngine)?.clearQueue()
+    fun setShuffleEnabled(enabled: Boolean) = (engine as? ShuffleEngine)?.setShuffleEnabled(enabled)
+    fun isShuffleEnabled(): Boolean = (engine as? ShuffleEngine)?.isShuffleEnabled() == true
+    fun pinForOffline(item: MediaItem) = (engine as? CacheEngine)?.pinForOffline(item)
+    fun unpinOffline(item: MediaItem) = (engine as? CacheEngine)?.unpinOffline(item)
+    fun pinCacheGroup(cacheGroupKey: String) = (engine as? CacheEngine)?.pinCacheGroup(cacheGroupKey)
+    fun unpinCacheGroup(cacheGroupKey: String) = (engine as? CacheEngine)?.unpinCacheGroup(cacheGroupKey)
+    fun evictCacheGroup(cacheGroupKey: String) = (engine as? CacheEngine)?.evictCacheGroup(cacheGroupKey)
+    fun clearUnpinnedCache() = (engine as? CacheEngine)?.clearUnpinnedCache()
+    fun setStreamingConfig(config: StreamingConfig) = (engine as? AdaptiveStreamingEngine)?.setStreamingConfig(config)
+    fun setQualityCap(cap: QualityCap) = (engine as? AdaptiveStreamingEngine)?.setQualityCap(cap)
+    fun preloadManifest(item: MediaItem) = (engine as? AdaptiveStreamingEngine)?.preloadManifest(item)
+    fun setDrmConfig(config: DrmGlobalConfig) = (engine as? DrmEngine)?.setDrmConfig(config)
+    fun acquireOfflineLicense(item: MediaItem): OfflineLicenseResult = (engine as? DrmEngine)?.acquireOfflineLicense(item) ?: OfflineLicenseResult.Failure("DRM engine unavailable")
+    fun releaseOfflineLicense(licenseId: String) = (engine as? DrmEngine)?.releaseOfflineLicense(licenseId)
+    fun cacheInfo(item: MediaItem): CacheInfo = (engine as? CacheEngine)?.cacheInfo(item) ?: CacheInfo(item.cacheKey ?: item.uri.toString(), CacheState.MISS, 0L, false)
 
     fun player(): PlatformPlayerEngine = engine
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return onStartCommandImpl(intent)
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = onStartCommandImpl(intent)
 
     override fun onDestroy() {
         runCatching { closeAudioEffectSession() }
@@ -225,23 +155,14 @@ class CrossAudioPlaybackService : Service() {
     }
 
     private fun updateAudioEffectSession(st: PlayerState) = updateAudioEffectSessionImpl(st)
-
     private fun openAudioEffectSession(sessionId: Int) = openAudioEffectSessionImpl(sessionId)
-
     private fun closeAudioEffectSession() = closeAudioEffectSessionImpl()
-
     private fun updateSessionThrottled(st: PlayerState) = updateSessionThrottledImpl(st)
-
     private fun updateNotificationThrottled(st: PlayerState) = updateNotificationThrottledImpl(st)
-
     private fun ensureForegroundStarting() = ensureForegroundStartingImpl()
-
     private fun buildNotification(st: PlayerState): Notification = buildNotificationImpl(st)
-
     private fun servicePI(action: String): PendingIntent = servicePIImpl(action)
-
     private fun createNotificationChannel() = createNotificationChannelImpl()
-
     private fun startForegroundCompat(id: Int, n: Notification) = startForegroundCompatImpl(id, n)
 
     companion object {

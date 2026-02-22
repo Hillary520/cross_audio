@@ -20,19 +20,12 @@ internal class CacheManager(
     @Volatile
     private var config = CacheConfig()
 
-    fun setConfig(value: CacheConfig) {
-        config = value
-        evictIfNeeded()
-    }
+    fun setConfig(value: CacheConfig) { config = value; evictIfNeeded() }
 
     fun cacheInfo(item: MediaItem): CacheInfo {
         val key = cacheKey(item)
         val e = db.get(key)
-        return if (e == null) {
-            CacheInfo(key, CacheState.MISS, 0L, false)
-        } else {
-            CacheInfo(key, e.state, e.sizeBytes, e.pinned)
-        }
+        return if (e == null) CacheInfo(key, CacheState.MISS, 0L, false) else CacheInfo(key, e.state, e.sizeBytes, e.pinned)
     }
 
     fun resolveHttp(item: MediaItem): CacheResolveResult {
@@ -50,32 +43,9 @@ internal class CacheManager(
         val finalFile = finalFileFor(key)
         val now = System.currentTimeMillis()
         val pinned = existing?.pinned == true || db.getGroup(group)?.pinned == true
-        db.upsert(
-            CacheEntry(
-                cacheKey = key,
-                uri = item.uri.toString(),
-                path = finalFile.absolutePath,
-                state = if (pinned) CacheState.PARTIAL else CacheState.MISS,
-                sizeBytes = existing?.sizeBytes ?: 0L,
-                lastAccessMs = now,
-                pinned = pinned,
-            ),
-        )
+        db.upsert(CacheEntry(key, item.uri.toString(), finalFile.absolutePath, if (pinned) CacheState.PARTIAL else CacheState.MISS, existing?.sizeBytes ?: 0L, now, pinned))
         db.upsertGroup(group, pinned = pinned, atMs = now)
-        db.upsertResource(
-            CacheResourceEntry(
-                resourceKey = key,
-                groupKey = group,
-                uri = item.uri.toString(),
-                path = finalFile.absolutePath,
-                type = CacheResourceType.PROGRESSIVE,
-                state = if (pinned) CacheState.PARTIAL else CacheState.MISS,
-                sizeBytes = existing?.sizeBytes ?: 0L,
-                pinned = pinned,
-                lastAccessMs = now,
-            ),
-        )
-
+        db.upsertResource(CacheResourceEntry(key, group, item.uri.toString(), finalFile.absolutePath, CacheResourceType.PROGRESSIVE, if (pinned) CacheState.PARTIAL else CacheState.MISS, existing?.sizeBytes ?: 0L, pinned, now))
         maybeStartReadThrough(item, key, group, pinned)
         return CacheResolveResult(cacheKey = key, localFile = null, pinned = pinned)
     }
@@ -86,31 +56,9 @@ internal class CacheManager(
         val existing = db.get(key)
         val finalFile = finalFileFor(key)
         val now = System.currentTimeMillis()
-        db.upsert(
-            CacheEntry(
-                cacheKey = key,
-                uri = item.uri.toString(),
-                path = existing?.path ?: finalFile.absolutePath,
-                state = existing?.state ?: CacheState.PARTIAL,
-                sizeBytes = existing?.sizeBytes ?: 0L,
-                lastAccessMs = now,
-                pinned = true,
-            ),
-        )
+        db.upsert(CacheEntry(key, item.uri.toString(), existing?.path ?: finalFile.absolutePath, existing?.state ?: CacheState.PARTIAL, existing?.sizeBytes ?: 0L, now, true))
         db.upsertGroup(group, pinned = true, atMs = now)
-        db.upsertResource(
-            CacheResourceEntry(
-                resourceKey = key,
-                groupKey = group,
-                uri = item.uri.toString(),
-                path = existing?.path ?: finalFile.absolutePath,
-                type = CacheResourceType.PROGRESSIVE,
-                state = existing?.state ?: CacheState.PARTIAL,
-                sizeBytes = existing?.sizeBytes ?: 0L,
-                pinned = true,
-                lastAccessMs = now,
-            ),
-        )
+        db.upsertResource(CacheResourceEntry(key, group, item.uri.toString(), existing?.path ?: finalFile.absolutePath, CacheResourceType.PROGRESSIVE, existing?.state ?: CacheState.PARTIAL, existing?.sizeBytes ?: 0L, true, now))
         events.cacheState(key, CacheState.PINNED)
         maybeStartReadThrough(item, key, group, pinned = true)
     }
@@ -163,18 +111,7 @@ internal class CacheManager(
         val now = System.currentTimeMillis()
         val pinned = db.getGroup(group)?.pinned == true
         db.upsertGroup(group, pinned = pinned, atMs = now)
-        db.upsertResource(
-            CacheResourceEntry(
-                resourceKey = "manifest:${hash(group)}:${hash(manifestUri)}",
-                groupKey = group,
-                uri = manifestUri,
-                type = CacheResourceType.MANIFEST,
-                state = CacheState.READY,
-                sizeBytes = sizeBytes,
-                pinned = pinned,
-                lastAccessMs = now,
-            ),
-        )
+        db.upsertResource(CacheResourceEntry("manifest:${hash(group)}:${hash(manifestUri)}", group, manifestUri, type = CacheResourceType.MANIFEST, state = CacheState.READY, sizeBytes = sizeBytes, pinned = pinned, lastAccessMs = now))
     }
 
     fun recordSegmentResource(item: MediaItem, segmentUri: String, sizeBytes: Long) {
@@ -182,24 +119,10 @@ internal class CacheManager(
         val now = System.currentTimeMillis()
         val pinned = db.getGroup(group)?.pinned == true
         db.upsertGroup(group, pinned = pinned, atMs = now)
-        db.upsertResource(
-            CacheResourceEntry(
-                resourceKey = "segment:${hash(group)}:${hash(segmentUri)}",
-                groupKey = group,
-                uri = segmentUri,
-                type = CacheResourceType.SEGMENT,
-                state = CacheState.READY,
-                sizeBytes = sizeBytes.coerceAtLeast(0L),
-                pinned = pinned,
-                lastAccessMs = now,
-            ),
-        )
+        db.upsertResource(CacheResourceEntry("segment:${hash(group)}:${hash(segmentUri)}", group, segmentUri, type = CacheResourceType.SEGMENT, state = CacheState.READY, sizeBytes = sizeBytes.coerceAtLeast(0L), pinned = pinned, lastAccessMs = now))
     }
 
-    fun release() {
-        downloader.shutdown()
-        db.close()
-    }
+    fun release() { downloader.shutdown(); db.close() }
 
     private fun maybeStartReadThrough(item: MediaItem, key: String, group: String, pinned: Boolean) {
         if (!isHttp(item)) return
@@ -282,34 +205,19 @@ internal class CacheManager(
         db.deleteGroup(groupKey)
     }
 
-    private fun finalFileFor(cacheKey: String): File {
-        val root = File(appContext.cacheDir, config.cacheDirName)
-        return File(root, "${hash(cacheKey)}.bin")
-    }
+    private fun finalFileFor(cacheKey: String): File = File(File(appContext.cacheDir, config.cacheDirName), "${hash(cacheKey)}.bin")
 
-    private fun tempFileFor(cacheKey: String): File {
-        val root = File(appContext.cacheDir, config.cacheDirName)
-        return File(root, "${hash(cacheKey)}.tmp")
-    }
+    private fun tempFileFor(cacheKey: String): File = File(File(appContext.cacheDir, config.cacheDirName), "${hash(cacheKey)}.tmp")
 
-    private fun cacheKey(item: MediaItem): String {
-        return item.cacheKey?.takeIf { it.isNotBlank() } ?: item.uri.toString()
-    }
+    private fun cacheKey(item: MediaItem): String = item.cacheKey?.takeIf { it.isNotBlank() } ?: item.uri.toString()
 
-    private fun cacheGroupKey(item: MediaItem): String {
-        return item.cacheGroupKey?.takeIf { it.isNotBlank() }
-            ?: item.cacheKey?.takeIf { it.isNotBlank() }
-            ?: item.uri.toString()
-    }
+    private fun cacheGroupKey(item: MediaItem): String = item.cacheGroupKey?.takeIf { it.isNotBlank() } ?: item.cacheKey?.takeIf { it.isNotBlank() } ?: item.uri.toString()
 
-    private fun hash(v: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        return md.digest(v.toByteArray()).joinToString(separator = "") { b -> "%02x".format(b) }
-    }
+    private fun hash(v: String): String = MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString(separator = "") { b -> "%02x".format(b) }
 
     private fun isHttp(item: MediaItem): Boolean {
-        val s = item.uri.scheme?.lowercase() ?: return false
-        return s == "http" || s == "https"
+        val scheme = item.uri.scheme?.lowercase() ?: return false
+        return scheme == "http" || scheme == "https"
     }
 }
 

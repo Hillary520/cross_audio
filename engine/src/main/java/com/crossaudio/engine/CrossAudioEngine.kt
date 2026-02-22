@@ -122,134 +122,37 @@ class CrossAudioEngine(
 
     internal fun syncQueueFromState() {
         val s = queueState.snapshot()
-        queue = s.items
-        index = s.currentIndex
-        repeatMode = s.repeatMode
-        shuffleEnabled = s.shuffleEnabled
+        queue = s.items; index = s.currentIndex; repeatMode = s.repeatMode; shuffleEnabled = s.shuffleEnabled
     }
-
-    internal fun emitQueueChanged() {
-        emitter.queueChanged(queue.size, index, shuffleEnabled)
-    }
-
-    override fun setQueue(items: List<MediaItem>, startIndex: Int) {
-        setQueueImpl(items, startIndex)
-    }
-
-    override fun addToQueue(items: List<MediaItem>, atIndex: Int?) {
-        addToQueueImpl(items, atIndex)
-    }
-
-    override fun removeFromQueue(indices: IntArray) {
-        removeFromQueueImpl(indices)
-    }
-
-    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
-        moveQueueItemImpl(fromIndex, toIndex)
-    }
-
-    override fun clearQueue() {
-        clearQueueImpl()
-    }
-
-    override fun setShuffleEnabled(enabled: Boolean) {
-        setShuffleEnabledImpl(enabled)
-    }
-
+    internal fun emitQueueChanged() { emitter.queueChanged(queue.size, index, shuffleEnabled) }
+    override fun setQueue(items: List<MediaItem>, startIndex: Int) { setQueueImpl(items, startIndex) }
+    override fun addToQueue(items: List<MediaItem>, atIndex: Int?) { addToQueueImpl(items, atIndex) }
+    override fun removeFromQueue(indices: IntArray) { removeFromQueueImpl(indices) }
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) { moveQueueItemImpl(fromIndex, toIndex) }
+    override fun clearQueue() { clearQueueImpl() }
+    override fun setShuffleEnabled(enabled: Boolean) { setShuffleEnabledImpl(enabled) }
     override fun isShuffleEnabled(): Boolean = isShuffleEnabledImpl()
-
-    override fun play() {
-        playImpl()
-    }
-
-    override fun pause() {
-        pauseImpl()
-    }
-
-    override fun stop() {
-        stopInternal(updateState = true)
-    }
-
-    override fun seekTo(positionMs: Long) {
-        seekToImpl(positionMs)
-    }
-
-    override fun skipNext() {
-        skipNextImpl()
-    }
-
-    override fun skipPrevious() {
-        skipPreviousImpl()
-    }
-
-    override fun setCrossfadeDurationMs(durationMs: Long) {
-        crossfadeDurationMs.set(durationMs.coerceAtLeast(0L))
-    }
-
-    override fun setRepeatMode(mode: RepeatMode) {
-        queueState.setRepeatMode(mode)
-        syncQueueFromState()
-        repeatMode = mode
-    }
-
-    override fun setCrossfadeDebugPanning(enabled: Boolean) {
-        debugCrossfadePan = enabled
-        Log.d(tag, "Debug crossfade pan set: $enabled")
-    }
-
-    override fun setCrossfadeHeadroom(headroom: Float) {
-        crossfadeHeadroom = headroom.coerceIn(0.5f, 1.0f)
-        Log.d(tag, "Crossfade headroom set: $crossfadeHeadroom")
-    }
-
-    override fun setVolume(volume: Float) {
-        val v = volume.coerceIn(0f, 1f)
-        this.volume = v
-        playback.setVolume(v)
-    }
-
-    override fun setCacheConfig(config: CacheConfig) {
-        cacheManager.setConfig(config)
-    }
-
-    override fun pinForOffline(item: MediaItem) {
-        pinManager.pin(item)
-    }
-
-    override fun unpinOffline(item: MediaItem) {
-        pinManager.unpin(item)
-    }
-
-    override fun pinCacheGroup(cacheGroupKey: String) {
-        cacheManager.pinGroup(cacheGroupKey)
-    }
-
-    override fun unpinCacheGroup(cacheGroupKey: String) {
-        cacheManager.unpinGroup(cacheGroupKey)
-    }
-
-    override fun evictCacheGroup(cacheGroupKey: String) {
-        cacheManager.evictGroup(cacheGroupKey)
-    }
-
-    override fun clearUnpinnedCache() {
-        cacheManager.clearUnpinnedCache()
-    }
-
-    override fun cacheInfo(item: MediaItem): CacheInfo {
-        return cacheManager.cacheInfo(item)
-    }
-
-    override fun setStreamingConfig(config: StreamingConfig) {
-        streamingConfig = config
-        qualityCap = config.qualityCap
-    }
-
-    override fun setQualityCap(cap: QualityCap) {
-        qualityCap = cap
-        qualityInfo = qualityInfo.copy(sourceType = qualityInfo.sourceType)
-    }
-
+    override fun play() { playImpl() }
+    override fun pause() { pauseImpl() }
+    override fun stop() { stopInternal(updateState = true) }
+    override fun seekTo(positionMs: Long) { seekToImpl(positionMs) }
+    override fun skipNext() { skipNextImpl() }
+    override fun skipPrevious() { skipPreviousImpl() }
+    override fun setCrossfadeDurationMs(durationMs: Long) { crossfadeDurationMs.set(durationMs.coerceAtLeast(0L)) }
+    override fun setRepeatMode(mode: RepeatMode) { queueState.setRepeatMode(mode); syncQueueFromState(); repeatMode = mode }
+    override fun setCrossfadeDebugPanning(enabled: Boolean) { debugCrossfadePan = enabled; Log.d(tag, "Debug crossfade pan set: $enabled") }
+    override fun setCrossfadeHeadroom(headroom: Float) { crossfadeHeadroom = headroom.coerceIn(0.5f, 1.0f); Log.d(tag, "Crossfade headroom set: $crossfadeHeadroom") }
+    override fun setVolume(volume: Float) { val v = volume.coerceIn(0f, 1f); this.volume = v; playback.setVolume(v) }
+    override fun setCacheConfig(config: CacheConfig) { cacheManager.setConfig(config) }
+    override fun pinForOffline(item: MediaItem) { pinManager.pin(item) }
+    override fun unpinOffline(item: MediaItem) { pinManager.unpin(item) }
+    override fun pinCacheGroup(cacheGroupKey: String) { cacheManager.pinGroup(cacheGroupKey) }
+    override fun unpinCacheGroup(cacheGroupKey: String) { cacheManager.unpinGroup(cacheGroupKey) }
+    override fun evictCacheGroup(cacheGroupKey: String) { cacheManager.evictGroup(cacheGroupKey) }
+    override fun clearUnpinnedCache() { cacheManager.clearUnpinnedCache() }
+    override fun cacheInfo(item: MediaItem): CacheInfo = cacheManager.cacheInfo(item)
+    override fun setStreamingConfig(config: StreamingConfig) { streamingConfig = config; qualityCap = config.qualityCap }
+    override fun setQualityCap(cap: QualityCap) { qualityCap = cap; qualityInfo = qualityInfo.copy(sourceType = qualityInfo.sourceType) }
     override fun currentQuality(): QualityInfo = qualityInfo
 
     override fun preloadManifest(item: MediaItem) {
@@ -268,10 +171,7 @@ class CrossAudioEngine(
         }
     }
 
-    override fun setDrmConfig(config: DrmGlobalConfig) {
-        drmConfig = config
-        drmManager.setGlobalConfig(config)
-    }
+    override fun setDrmConfig(config: DrmGlobalConfig) { drmConfig = config; drmManager.setGlobalConfig(config) }
 
     override fun acquireOfflineLicense(item: MediaItem): OfflineLicenseResult {
         val drm = item.drm ?: return OfflineLicenseResult.Failure("MediaItem has no drm request")
@@ -291,14 +191,8 @@ class CrossAudioEngine(
         return result
     }
 
-    override fun releaseOfflineLicense(licenseId: String) {
-        drmManager.releaseOfflineLicense(licenseId)
-    }
-
-    override fun setAudioProcessing(config: AudioProcessingConfig) {
-        audioProcessingConfig = config
-        playback.setAudioProcessing(config)
-    }
+    override fun releaseOfflineLicense(licenseId: String) { drmManager.releaseOfflineLicense(licenseId) }
+    override fun setAudioProcessing(config: AudioProcessingConfig) { audioProcessingConfig = config; playback.setAudioProcessing(config) }
 
     override fun telemetrySnapshot(): EngineTelemetrySnapshot {
         return EngineTelemetrySnapshot(
@@ -311,12 +205,7 @@ class CrossAudioEngine(
         )
     }
 
-    override fun release() {
-        stop()
-        drmManager.release()
-        cacheManager.release()
-        scope.coroutineContext.cancel()
-    }
+    override fun release() { stop(); drmManager.release(); cacheManager.release(); scope.coroutineContext.cancel() }
 
     /**
      * Audio session used for our single output [android.media.AudioTrack].
@@ -325,28 +214,14 @@ class CrossAudioEngine(
     fun audioSessionId(): Int = outputAudioSessionId.get()
 
     private fun stopInternal(updateState: Boolean) = stopInternalImpl(updateState)
-
-    private fun startCurrentTrack(item: MediaItem, startPositionMs: Long, onStarted: (Boolean) -> Unit) =
-        startCurrentTrackImpl(item, startPositionMs, onStarted)
-
+    private fun startCurrentTrack(item: MediaItem, startPositionMs: Long, onStarted: (Boolean) -> Unit) = startCurrentTrackImpl(item, startPositionMs, onStarted)
     private fun startNextTrackIfNeeded() = startNextTrackIfNeededImpl()
-
     private fun maybeStartControlLoop() = maybeStartControlLoopImpl()
-
     private fun onRendererEnded() = onRendererEndedImpl()
-
     internal fun rendererUnderrunCount(): Long = rendererUnderrunCountImpl()
-
-    internal fun emitTelemetry(event: EngineTelemetryEvent) {
-        telemetryFlow.tryEmit(event)
-    }
-
-    private fun setRendererSource(mode: RenderMode, src: com.crossaudio.engine.internal.playback.RenderSource) =
-        setRendererSourceImpl(mode, src)
-
+    internal fun emitTelemetry(event: EngineTelemetryEvent) { telemetryFlow.tryEmit(event) }
+    private fun setRendererSource(mode: RenderMode, src: com.crossaudio.engine.internal.playback.RenderSource) = setRendererSourceImpl(mode, src)
     private fun cancelTransitionsSync(cancelPreload: Boolean) = cancelTransitionsSyncImpl(cancelPreload)
-
     private fun cancelPreloadSync() = cancelPreloadSyncImpl()
-
     internal fun debugSnapshot(): String = debugSnapshotImpl()
 }

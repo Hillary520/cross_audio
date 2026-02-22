@@ -36,17 +36,9 @@ internal class TrackDecoder16(
     private val onError: (Throwable) -> Unit,
 ) {
     private val tag = "TrackDecoder16"
-
-    @Volatile
-    private var thread: Thread? = null
-
-    fun start() {
-        thread = Thread({ runLoop() }, "cross-audio-decode").apply { start() }
-    }
-
-    fun join(timeoutMs: Long) {
-        thread?.join(timeoutMs)
-    }
+    @Volatile private var thread: Thread? = null
+    fun start() { thread = Thread({ runLoop() }, "cross-audio-decode").apply { start() } }
+    fun join(timeoutMs: Long) { thread?.join(timeoutMs) }
 
     private fun runLoop() {
         var extractor: MediaExtractor? = null
@@ -57,7 +49,7 @@ internal class TrackDecoder16(
             extractor = MediaExtractor()
             HttpMediaSource.applyToExtractor(extractor, source, context.contentResolver)
 
-            val (trackIndex, trackFormat) = selectAudioTrack(extractor)
+            val (trackIndex, trackFormat) = selectAudioTrackFromExtractor(extractor)
                 ?: throw IllegalArgumentException("No audio track found for source=$source")
             extractor.selectTrack(trackIndex)
 
@@ -246,38 +238,9 @@ internal class TrackDecoder16(
             pipe.markEos()
         } catch (t: Throwable) {
             if (t is InterruptedException) return
-            Log.e(tag, "Decode error", t)
-            try {
-                pipe.markEos()
-            } catch (_: Throwable) {
-            }
-            onError(t)
+            Log.e(tag, "Decode error", t); runCatching { pipe.markEos() }; onError(t)
         } finally {
-            try {
-                codec?.stop()
-            } catch (_: Throwable) {
-            }
-            try {
-                codec?.release()
-            } catch (_: Throwable) {
-            }
-            try {
-                extractor?.release()
-            } catch (_: Throwable) {
-            }
-            try {
-                activeDrmSession?.let { drmSessionManager?.closePlaybackSession(it) }
-            } catch (_: Throwable) {
-            }
+            cleanupTrackDecoder(codec, extractor, activeDrmSession, drmSessionManager)
         }
-    }
-
-    private fun selectAudioTrack(extractor: MediaExtractor): Pair<Int, MediaFormat>? {
-        for (i in 0 until extractor.trackCount) {
-            val f = extractor.getTrackFormat(i)
-            val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
-            if (mime.startsWith("audio/")) return i to f
-        }
-        return null
     }
 }

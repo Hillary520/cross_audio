@@ -11,21 +11,16 @@ internal fun CrossAudioEngine.stopInternalImpl(updateState: Boolean) {
     generation.incrementAndGet()
     activeGeneration = 0L
     inhibitTransitions = true
-
     renderStop.set(true)
     controlJob?.cancel()
     controlJob = null
-
     playback.stopRenderer()
-
     currentDecoder?.stopAndEos()
     nextDecoder?.stopAndEos()
     currentPipe?.markEos()
     nextPipe?.markEos()
-
     currentDecoder?.join(300)
     nextDecoder?.join(300)
-
     currentDecoder = null
     currentPipe = null
     currentFormat = null
@@ -38,7 +33,6 @@ internal fun CrossAudioEngine.stopInternalImpl(updateState: Boolean) {
     nextDurationUs = 0L
     nextFailed = false
     nextQueueIndex = -1
-
     crossfadeSource = null
     concatSource = null
     fadeOutSource = null
