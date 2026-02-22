@@ -9,6 +9,7 @@ local.properties
 
 # IntelliJ / Android Studio
 .idea/
+.vscode/
 *.iml
 
 # Kotlin
