@@ -48,6 +48,7 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
 
             val fadeMs = crossfadeDurationMs.get()
             val autoNextIndex = queueState.peekNextIndexForAuto()
+            val cp = currentPipe
             if (fadeMs == 0L && currentDurationUs > 0 && autoNextIndex != null && autoNextIndex != index) {
                 if (TransitionController.shouldPreload(posMs, currentDurationUs, fadeMs)) {
                     startNextTrackIfNeededImpl()
@@ -55,7 +56,6 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
 
                 val nf = nextFormat
                 val np = nextPipe
-                val cp = currentPipe
                 if (concatSource == null && !nextFailed && nf != null && np != null && cp != null) {
                     if (nf.sampleRate == fmt.sampleRate && nf.channelCount == fmt.channelCount) {
                         val minBufferedSamples = fmt.sampleRate / 10 * fmt.channelCount
@@ -116,7 +116,6 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
                 if (posMs >= startFadeMs) {
                     val nf = nextFormat
                     val np = nextPipe
-                    val cp = currentPipe
                     if (nf != null && np != null && cp != null) {
                         if (nf.sampleRate == fmt.sampleRate && nf.channelCount == fmt.channelCount) {
                             val fadeFrames = (fadeMs * fmt.sampleRate) / 1000L

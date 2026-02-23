@@ -1,8 +1,11 @@
 package com.crossaudio.engine
 
+import android.util.Log
+
 internal fun CrossAudioEngine.setQueueImpl(items: List<MediaItem>, startIndex: Int) {
     queueState.setQueue(items, startIndex)
     syncQueueFromState()
+    Log.d(tag, "setQueue size=${queue.size} startIndex=$startIndex currentIndex=$index")
     stop()
     if (items.isEmpty()) {
         _state.value = PlayerState.Idle
@@ -15,6 +18,7 @@ internal fun CrossAudioEngine.setQueueImpl(items: List<MediaItem>, startIndex: I
 internal fun CrossAudioEngine.addToQueueImpl(items: List<MediaItem>, atIndex: Int?) {
     queueState.addToQueue(items, atIndex)
     syncQueueFromState()
+    Log.d(tag, "addToQueue added=${items.size} atIndex=${atIndex ?: queue.size} size=${queue.size} currentIndex=$index")
     emitQueueChanged()
 }
 
@@ -51,6 +55,9 @@ internal fun CrossAudioEngine.removeFromQueueImpl(indices: IntArray) {
 
 internal fun CrossAudioEngine.moveQueueItemImpl(fromIndex: Int, toIndex: Int) {
     if (!queueState.moveQueueItem(fromIndex, toIndex)) return
+    // Reordering can invalidate a preloaded "next" track. Drop transition/preload state so
+    // auto-next and crossfade use the new queue order.
+    cancelTransitionsSyncImpl(cancelPreload = true)
     syncQueueFromState()
     emitQueueChanged()
 }

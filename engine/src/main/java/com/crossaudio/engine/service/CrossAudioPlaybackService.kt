@@ -7,9 +7,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.audiofx.AudioEffect
 import android.os.Build
 import android.os.IBinder
+import android.util.LruCache
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media.app.NotificationCompat.MediaStyle
@@ -34,6 +36,7 @@ import com.crossaudio.engine.StreamingConfig
 import com.crossaudio.engine.platform.PlatformPlayerEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -59,6 +62,15 @@ class CrossAudioPlaybackService : Service() {
     internal var effectSessionOpened: Boolean = false
     internal var effectSessionId: Int = 0
     @Volatile internal var lastPlayerState: PlayerState = PlayerState.Idle
+    @Volatile internal var sessionItem: MediaItem? = null
+    @Volatile internal var sessionPositionMs: Long = 0L
+    @Volatile internal var currentArtworkUrl: String? = null
+    @Volatile internal var currentArtworkBitmap: Bitmap? = null
+    @Volatile internal var artworkRequestUrl: String? = null
+    internal var artworkLoadJob: Job? = null
+    internal val artworkCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -146,6 +158,8 @@ class CrossAudioPlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = onStartCommandImpl(intent)
 
     override fun onDestroy() {
+        runCatching { artworkLoadJob?.cancel() }
+        runCatching { artworkCache.evictAll() }
         runCatching { closeAudioEffectSession() }
         runCatching { stopForeground(true) }
         runCatching { session.release() }

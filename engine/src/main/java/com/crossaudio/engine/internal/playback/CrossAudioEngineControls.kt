@@ -85,22 +85,51 @@ internal fun CrossAudioEngine.seekToImpl(positionMs: Long) {
 }
 
 internal fun CrossAudioEngine.skipNextImpl() {
-    if (queue.isEmpty()) return
+    syncQueueFromState()
+    if (queue.isEmpty()) {
+        Log.d(tag, "skipNext ignored: empty queue")
+        return
+    }
     inhibitTransitions = true
     cancelTransitionsSyncImpl(cancelPreload = true)
     val from = index
-    val ni = queueState.nextIndexForSkip() ?: return
+    val ni = queueState.nextIndexForSkip()
+    if (ni == null) {
+        Log.d(tag, "skipNext no-op: fromIndex=$from size=${queue.size} repeat=$repeatMode")
+        return
+    }
     syncQueueFromState()
+    Log.d(tag, "skipNext from=$from to=$ni size=${queue.size}")
     stop()
     emitter.trackTransition(from, ni, TrackTransitionReason.SKIP)
 }
 
 internal fun CrossAudioEngine.skipPreviousImpl() {
+    syncQueueFromState()
     if (queue.isEmpty()) return
+
+    val positionMs = when (val current = _state.value) {
+        is PlayerState.Playing -> current.positionMs
+        is PlayerState.Paused -> current.positionMs
+        else -> 0L
+    }
+
+    // Spotify-like behavior: if we're a few seconds into the track, restart it.
+    if (positionMs > 3_000L) {
+        Log.d(tag, "skipPrevious restart-current posMs=$positionMs index=$index")
+        seekToImpl(0L)
+        return
+    }
+
     inhibitTransitions = true
     cancelTransitionsSyncImpl(cancelPreload = true)
     val from = index
-    val ni = queueState.prevIndexForSkip() ?: return
+    val ni = queueState.prevIndexForSkip()
+    if (ni == null) {
+        Log.d(tag, "skipPrevious no-prev restart-current from=$from posMs=$positionMs")
+        seekToImpl(0L)
+        return
+    }
     syncQueueFromState()
     stop()
     emitter.trackTransition(from, ni, TrackTransitionReason.SKIP)

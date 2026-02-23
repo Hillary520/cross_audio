@@ -149,9 +149,9 @@ internal class QueueState {
         if (repeatMode == RepeatMode.ONE && auto) return currentIndex
         if (!shuffleEnabled) {
             return if (currentIndex < items.lastIndex) {
-                currentIndex + 1
+                (currentIndex + 1).also { currentIndex = it }
             } else if (repeatMode == RepeatMode.ALL) {
-                0
+                0.also { currentIndex = it }
             } else {
                 null
             }

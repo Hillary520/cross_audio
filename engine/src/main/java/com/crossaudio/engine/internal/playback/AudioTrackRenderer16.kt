@@ -117,10 +117,14 @@ internal class AudioTrackRenderer16(
         }
 
         val minBufferSize = AudioTrack.getMinBufferSize(format.sampleRate, channelMask, format.encoding)
+            .coerceAtLeast(0)
         // For external EQ apps (AudioEffect), we generally want to avoid the "fast track" path, which
         // may bypass effects on some devices. A larger buffer + PERFORMANCE_MODE_NONE nudges AudioTrack
         // onto the normal mixer path.
-        val bufferSize = (minBufferSize.coerceAtLeast(8192)) * 4
+        val bytesPerSample = 2 // PCM 16-bit.
+        val bytesPerSecond = format.sampleRate * format.channelCount * bytesPerSample
+        val targetLatencyBufferBytes = (bytesPerSecond * 3) / 4 // ~750ms output buffer to reduce underruns on jittery networks.
+        val bufferSize = maxOf(minBufferSize * 6, targetLatencyBufferBytes, 32 * 1024)
 
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -154,6 +158,10 @@ internal class AudioTrackRenderer16(
                     } else {
                         Log.d(tag, "AudioTrack created with sessionId=$actual")
                     }
+                    Log.d(
+                        tag,
+                        "AudioTrack buffer sizing sr=${format.sampleRate} ch=${format.channelCount} minBuffer=$minBufferSize bufferSize=$bufferSize",
+                    )
                 }
                 it.setVolume(volume)
                 it.play()

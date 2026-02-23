@@ -80,7 +80,8 @@ class CrossAudioEngine(
     internal val playback = PlaybackCoordinator(renderStop)
     internal var currentTrackStartFrames: Long = 0L
     @Volatile internal var currentBasePositionMs: Long = 0L
-    internal val pipeCapacitySamples = 48000 * 2 * 3 // ~3s stereo at 48k; helps long crossfades stay smooth
+    internal val currentPipeCapacitySamples = 48000 * 2 * 12 // ~12s stereo at 48k for jitter tolerance on lossless streams
+    internal val nextPipeCapacitySamples = 48000 * 2 * 5 // ~5s stereo at 48k for next-track prefetch/crossfade
 
     internal enum class RenderMode { PIPE, CONCAT, CROSSFADE, FADEOUT }
     @Volatile internal var renderMode: RenderMode = RenderMode.PIPE

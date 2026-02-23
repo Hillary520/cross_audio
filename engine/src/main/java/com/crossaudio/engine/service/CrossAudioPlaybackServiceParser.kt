@@ -37,6 +37,8 @@ internal fun CrossAudioPlaybackService.parseItemsImpl(intent: Intent): List<Medi
                                 uri = android.net.Uri.parse(uri),
                                 title = obj.optNullableString("title"),
                                 artist = obj.optNullableString("artist"),
+                                artworkUri = obj.optNullableString("artworkUri"),
+                                durationMs = obj.optNullableLong("durationMs"),
                                 headers = headers,
                                 cacheKey = obj.optNullableString("cacheKey"),
                                 cacheGroupKey = obj.optNullableString("cacheGroupKey"),
@@ -141,4 +143,17 @@ private fun JSONObject.optNullableString(name: String): String? {
     if (!has(name)) return null
     val value = optString(name, "").trim()
     return value.takeIf { it.isNotEmpty() }
+}
+
+private fun JSONObject.optNullableLong(name: String): Long? {
+    if (!has(name)) return null
+    val value = opt(name)
+    return when (value) {
+        is Int -> value.toLong()
+        is Long -> value
+        is Double -> value.toLong()
+        is Float -> value.toLong()
+        is String -> value.toLongOrNull()
+        else -> null
+    }?.takeIf { it > 0L }
 }

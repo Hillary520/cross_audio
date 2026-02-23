@@ -87,7 +87,7 @@ internal fun CrossAudioEngine.startCurrentTrackImpl(
         },
         startPositionMs = startPositionMs,
         outputSampleRate = 48000,
-        capacitySamples = pipeCapacitySamples,
+        capacitySamples = currentPipeCapacitySamples,
         onFormat = onFormat@{ fmt, durUs ->
             val session = sessionRef ?: return@onFormat
             if (activeGeneration != gen) return@onFormat
@@ -188,7 +188,7 @@ internal fun CrossAudioEngine.startNextTrackIfNeededImpl() {
         },
         startPositionMs = 0L,
         outputSampleRate = 48000,
-        capacitySamples = pipeCapacitySamples,
+        capacitySamples = nextPipeCapacitySamples,
         onFormat = fmtCb@{ fmt, durUs ->
             val session = sessionRef ?: return@fmtCb
             if (nextDecoder !== session) return@fmtCb

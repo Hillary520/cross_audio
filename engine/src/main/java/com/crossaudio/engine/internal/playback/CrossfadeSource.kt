@@ -2,8 +2,10 @@ package com.crossaudio.engine.internal.playback
 
 import com.crossaudio.engine.internal.audio.PcmFormat
 import com.crossaudio.engine.internal.audio.PcmPipe16
-import kotlin.math.sqrt
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 internal class CrossfadeSource(
     override val format: PcmFormat,
@@ -66,16 +68,17 @@ internal class CrossfadeSource(
             val haveA = f < framesA
             val haveB = f < framesB
 
-            // Spotify-style feel: equal-power using sqrt curve rather than sin/cos.
-            // This brings B in earlier (more audible overlap) while staying smooth.
             val t = when {
                 totalFadeFrames <= 0 -> 1f
                 !haveB -> 0f // Hold off fading until B has audio.
                 !haveA -> 1f
                 else -> (fadeProgressFrames.toFloat() / totalFadeFrames.toFloat())
             }.coerceIn(0f, 1f)
-            val gB = sqrt(t.toDouble()).toFloat()
-            val gA = sqrt((1f - t).toDouble()).toFloat()
+            // Ease-in-out progress and then apply equal-power gains for a smoother overlap feel.
+            val u = smoothstep(t)
+            val angle = ((PI / 2.0) * u).toFloat()
+            val gA = cos(angle)
+            val gB = sin(angle)
 
             val base = f * ch
             if (debugPan && ch == 2) {
@@ -111,5 +114,10 @@ internal class CrossfadeSource(
         }
 
         return framesOut
+    }
+
+    private fun smoothstep(t: Float): Float {
+        val clamped = t.coerceIn(0f, 1f)
+        return clamped * clamped * (3f - 2f * clamped)
     }
 }
