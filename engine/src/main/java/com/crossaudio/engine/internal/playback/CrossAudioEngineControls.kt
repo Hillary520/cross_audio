@@ -108,14 +108,22 @@ internal fun CrossAudioEngine.skipPreviousImpl() {
     syncQueueFromState()
     if (queue.isEmpty()) return
 
-    val positionMs = when (val current = _state.value) {
-        is PlayerState.Playing -> current.positionMs
-        is PlayerState.Paused -> current.positionMs
-        else -> 0L
+    val positionMs = run {
+        val fmt = currentFormat
+        if (fmt != null) {
+            val framesIntoTrack = (playback.playedFrames() - currentTrackStartFrames).coerceAtLeast(0L)
+            currentBasePositionMs + (framesIntoTrack * 1000L) / fmt.sampleRate.toLong()
+        } else {
+            when (val current = _state.value) {
+                is PlayerState.Playing -> current.positionMs
+                is PlayerState.Paused -> current.positionMs
+                else -> 0L
+            }
+        }
     }
 
-    // Spotify-like behavior: if we're a few seconds into the track, restart it.
-    if (positionMs > 3_000L) {
+    // Spotify-like behavior: when sufficiently into the track, restart current item.
+    if (positionMs > 10_000L) {
         Log.d(tag, "skipPrevious restart-current posMs=$positionMs index=$index")
         seekToImpl(0L)
         return

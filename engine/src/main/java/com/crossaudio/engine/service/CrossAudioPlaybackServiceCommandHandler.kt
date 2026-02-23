@@ -33,14 +33,12 @@ internal fun CrossAudioPlaybackService.onStartCommandImpl(intent: Intent?): Int 
                 }
             }
             CrossAudioPlaybackService.ACTION_NEXT -> {
-                engine.skipNext()
                 ensureForegroundStartingImpl()
-                engine.play()
+                engine.skipNext()
             }
             CrossAudioPlaybackService.ACTION_PREV -> {
-                engine.skipPrevious()
                 ensureForegroundStartingImpl()
-                engine.play()
+                engine.skipPrevious()
             }
             CrossAudioPlaybackService.ACTION_STOP -> {
                 engine.stop()

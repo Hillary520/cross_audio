@@ -93,16 +93,17 @@ class CrossAudioPlaybackService : Service() {
                 }
 
                 override fun onSkipToNext() {
+                    ensureForegroundStartingImpl()
                     engine.skipNext()
-                    engine.play()
                 }
 
                 override fun onSkipToPrevious() {
+                    ensureForegroundStartingImpl()
                     engine.skipPrevious()
-                    engine.play()
                 }
 
                 override fun onSeekTo(pos: Long) {
+                    ensureForegroundStartingImpl()
                     engine.seekTo(pos)
                 }
             })
