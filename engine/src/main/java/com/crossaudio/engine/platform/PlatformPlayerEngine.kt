@@ -133,7 +133,9 @@ class PlatformPlayerEngine(
     override fun pause() {
         delegate.pause()
         noisy.unregister()
-        focus.abandon()
+        // Don't abandon audio focus on pause — only on explicit stop.
+        // This keeps our focus claim alive so the system doesn't treat
+        // the service as expendable while the user may resume soon.
     }
 
     override fun stop() {

@@ -9,9 +9,12 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.audiofx.AudioEffect
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.LruCache
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media.app.NotificationCompat.MediaStyle
@@ -69,14 +72,36 @@ class CrossAudioPlaybackService : Service() {
     @Volatile internal var currentArtworkBitmap: Bitmap? = null
     @Volatile internal var artworkRequestUrl: String? = null
     internal var artworkLoadJob: Job? = null
-    internal val artworkCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+    internal val artworkCache = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+
+    // --- WakeLock fields ---
+    internal var cpuWakeLock: PowerManager.WakeLock? = null
+    internal var wifiLock: WifiManager.WifiLock? = null
+
+    // --- Stability bookkeeping ---
+    internal var idleStopJob: Job? = null
+    internal var pauseForegroundJob: Job? = null
+    internal var consecutiveErrors: Int = 0
 
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
+
+        // Pre-create WakeLocks (acquired/released in updateNotificationThrottledImpl).
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        cpuWakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "CrossAudio::PlaybackCpu",
+        )
+        @Suppress("DEPRECATION")
+        val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+        wifiLock = wm.createWifiLock(
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "CrossAudio::PlaybackWifi",
+        )
 
         session = MediaSessionCompat(this, "CrossAudioSession").apply {
             setCallback(object : MediaSessionCompat.Callback() {
@@ -161,10 +186,27 @@ class CrossAudioPlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = onStartCommandImpl(intent)
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // If we're still playing, keep the service alive.
+        val st = lastPlayerState
+        if (st is PlayerState.Playing || st is PlayerState.Buffering) {
+            Log.d("CrossAudioService", "onTaskRemoved while playing — staying alive.")
+            return
+        }
+        // Otherwise, clean up.
+        Log.d("CrossAudioService", "onTaskRemoved while idle — stopping.")
+        releaseWakeLocks()
+        stopSelf()
+    }
+
     override fun onDestroy() {
+        runCatching { idleStopJob?.cancel() }
+        runCatching { pauseForegroundJob?.cancel() }
         runCatching { artworkLoadJob?.cancel() }
         runCatching { artworkCache.evictAll() }
         runCatching { closeAudioEffectSession() }
+        runCatching { releaseWakeLocks() }
         runCatching { stopForeground(true) }
         runCatching { session.release() }
         engine.release()
@@ -182,6 +224,38 @@ class CrossAudioPlaybackService : Service() {
     private fun servicePI(action: String): PendingIntent = servicePIImpl(action)
     private fun createNotificationChannel() = createNotificationChannelImpl()
     private fun startForegroundCompat(id: Int, n: Notification) = startForegroundCompatImpl(id, n)
+
+    /** Acquire CPU and WiFi WakeLocks to keep playback alive during screen-off. */
+    internal fun acquireWakeLocks() {
+        cpuWakeLock?.let { wl ->
+            if (!wl.isHeld) {
+                wl.acquire()
+                Log.d("CrossAudioService", "CPU WakeLock acquired")
+            }
+        }
+        wifiLock?.let { wl ->
+            if (!wl.isHeld) {
+                wl.acquire()
+                Log.d("CrossAudioService", "WiFi WakeLock acquired")
+            }
+        }
+    }
+
+    /** Release CPU and WiFi WakeLocks. Safe to call multiple times. */
+    internal fun releaseWakeLocks() {
+        cpuWakeLock?.let { wl ->
+            if (wl.isHeld) {
+                wl.release()
+                Log.d("CrossAudioService", "CPU WakeLock released")
+            }
+        }
+        wifiLock?.let { wl ->
+            if (wl.isHeld) {
+                wl.release()
+                Log.d("CrossAudioService", "WiFi WakeLock released")
+            }
+        }
+    }
 
     companion object {
         const val CHANNEL_ID = "cross_audio_playback"

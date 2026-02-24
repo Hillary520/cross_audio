@@ -16,6 +16,8 @@ import android.support.v4.media.session.PlaybackStateCompat
 import com.crossaudio.engine.MediaItem
 import com.crossaudio.engine.PlayerState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -23,6 +25,13 @@ import java.net.URL
 
 private const val ARTWORK_FETCH_TIMEOUT_MS = 6_000
 private const val ARTWORK_DECODE_TARGET_PX = 768
+
+/** How long to wait in Idle/Ended/Error before actually stopping the service. */
+private const val IDLE_STOP_DELAY_MS = 30_000L
+/** Max consecutive errors before giving up and stopping. */
+private const val MAX_CONSECUTIVE_ERRORS = 3
+/** How long to keep foreground status after pausing before demoting. */
+private const val PAUSE_FOREGROUND_TIMEOUT_MS = 5L * 60 * 1_000 // 5 minutes
 
 internal fun CrossAudioPlaybackService.updateSessionThrottledImpl(st: PlayerState) {
     val now = android.os.SystemClock.uptimeMillis()
@@ -67,14 +76,50 @@ internal fun CrossAudioPlaybackService.updateSessionThrottledImpl(st: PlayerStat
 }
 
 internal fun CrossAudioPlaybackService.updateNotificationThrottledImpl(st: PlayerState) {
+    // Cancel any pending idle-stop whenever a new state comes in.
+    idleStopJob?.cancel()
+    idleStopJob = null
+    // Also cancel the pause-foreground-timeout whenever state changes.
+    pauseForegroundJob?.cancel()
+    pauseForegroundJob = null
+
     val shouldShow = st is PlayerState.Playing || st is PlayerState.Paused || st is PlayerState.Buffering
     if (!shouldShow) {
-        if (isForeground) {
-            stopForeground(true)
-            isForeground = false
+        // --- Error recovery: try to skip to the next track instead of dying ---
+        if (st is PlayerState.Error) {
+            consecutiveErrors++
+            android.util.Log.w("CrossAudioService", "PlayerState.Error #$consecutiveErrors: ${st.message}")
+            if (consecutiveErrors < MAX_CONSECUTIVE_ERRORS) {
+                // Attempt to skip to the next track.
+                scope.launch {
+                    engine.skipNext()
+                }
+                return
+            }
+            android.util.Log.e("CrossAudioService", "Too many consecutive errors ($consecutiveErrors), stopping.")
         }
-        stopSelf()
+
+        // For Idle / Ended / fatal Error: schedule a delayed stop.
+        // During normal track transitions the state briefly becomes Idle/Ended
+        // before switching back to Buffering/Playing, so the delay avoids
+        // killing the service in the middle of a transition.
+        idleStopJob = scope.launch {
+            delay(IDLE_STOP_DELAY_MS)
+            android.util.Log.d("CrossAudioService", "Idle stop timeout reached — stopping service.")
+            if (isForeground) {
+                stopForeground(true)
+                isForeground = false
+            }
+            releaseWakeLocks()
+            stopSelf()
+        }
         return
+    }
+
+    // We have a showable state (Playing / Paused / Buffering).
+    // Reset consecutive error counter on any successful state.
+    if (st is PlayerState.Playing || st is PlayerState.Buffering) {
+        consecutiveErrors = 0
     }
 
     val now = android.os.SystemClock.uptimeMillis()
@@ -87,6 +132,11 @@ internal fun CrossAudioPlaybackService.updateNotificationThrottledImpl(st: Playe
         if ((now - lastNotifUpdateMs) < minInterval) return
     }
 
+    // Acquire WakeLocks when actively playing.
+    if (isPlaying) {
+        acquireWakeLocks()
+    }
+
     val n = buildNotificationImpl(st)
     if (st is PlayerState.Playing && !isForeground) {
         startForegroundCompatImpl(CrossAudioPlaybackService.NOTIF_ID, n)
@@ -94,8 +144,19 @@ internal fun CrossAudioPlaybackService.updateNotificationThrottledImpl(st: Playe
     } else {
         notificationManager.notify(CrossAudioPlaybackService.NOTIF_ID, n)
         if (st is PlayerState.Paused && isForeground) {
-            stopForeground(false)
+            // Keep foreground for a while so the system doesn't kill us.
+            // Use STOP_FOREGROUND_DETACH to keep the notification visible
+            // but allow it to be swiped away.
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
             isForeground = false
+            // Release WakeLocks — we're paused, no need to hold CPU/WiFi.
+            releaseWakeLocks()
+            // Schedule full demotion after a timeout.
+            pauseForegroundJob = scope.launch {
+                delay(PAUSE_FOREGROUND_TIMEOUT_MS)
+                android.util.Log.d("CrossAudioService", "Pause foreground timeout — stopping service.")
+                stopSelf()
+            }
         }
     }
 
