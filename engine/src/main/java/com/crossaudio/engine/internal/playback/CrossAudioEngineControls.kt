@@ -100,7 +100,7 @@ internal fun CrossAudioEngine.skipNextImpl() {
     }
     syncQueueFromState()
     Log.d(tag, "skipNext from=$from to=$ni size=${queue.size}")
-    stop()
+    restartFromSkippedIndex(shouldPlay = shouldKeepPlayingAfterSkip())
     emitter.trackTransition(from, ni, TrackTransitionReason.SKIP)
 }
 
@@ -139,6 +139,37 @@ internal fun CrossAudioEngine.skipPreviousImpl() {
         return
     }
     syncQueueFromState()
-    stop()
+    restartFromSkippedIndex(shouldPlay = shouldKeepPlayingAfterSkip())
     emitter.trackTransition(from, ni, TrackTransitionReason.SKIP)
+}
+
+private fun CrossAudioEngine.shouldKeepPlayingAfterSkip(): Boolean {
+    return when (_state.value) {
+        is PlayerState.Playing,
+        is PlayerState.Buffering,
+        -> true
+        else -> false
+    }
+}
+
+private fun CrossAudioEngine.restartFromSkippedIndex(shouldPlay: Boolean) {
+    val item = queue.getOrNull(index)
+    if (item == null) {
+        stopInternalImpl(updateState = true)
+        return
+    }
+
+    if (!shouldPlay) {
+        stopInternalImpl(updateState = false)
+        _state.value = PlayerState.Paused(item, positionMs = 0L)
+        return
+    }
+
+    _state.value = PlayerState.Buffering
+    stopInternalImpl(updateState = false)
+    startCurrentTrackImpl(item, startPositionMs = 0L) { startedOk ->
+        if (!startedOk) return@startCurrentTrackImpl
+        _state.value = PlayerState.Playing(item, positionMs = 0L)
+        maybeStartControlLoopImpl()
+    }
 }

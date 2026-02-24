@@ -2,6 +2,7 @@ package com.crossaudio.engine.internal.queue
 
 import com.crossaudio.engine.MediaItem
 import com.crossaudio.engine.RepeatMode
+import kotlin.random.Random
 
 internal class QueueState {
     private val lock = Any()
@@ -36,6 +37,7 @@ internal class QueueState {
     }
 
     fun setShuffleEnabled(enabled: Boolean) = synchronized(lock) {
+        if (shuffleEnabled == enabled) return@synchronized
         shuffleEnabled = enabled
         rebuildOrder()
     }
@@ -43,13 +45,27 @@ internal class QueueState {
     fun addToQueue(additions: List<MediaItem>, atIndex: Int?) = synchronized(lock) {
         if (additions.isEmpty()) return@synchronized
         val insertAt = (atIndex ?: items.size).coerceIn(0, items.size)
+        val previousSize = items.size
         items.addAll(insertAt, additions)
         if (currentIndex < 0) {
             currentIndex = 0
         } else {
             currentIndex = QueueMutator.adjustCurrentForInsert(currentIndex, insertAt, additions.size)
         }
-        rebuildOrder()
+        if (!shuffleEnabled || !isValidPlayOrder(playOrder, previousSize)) {
+            rebuildOrder()
+            return@synchronized
+        }
+
+        // Keep existing shuffled order stable; only append newly inserted indices.
+        val shiftedExisting = IntArray(playOrder.size) { orderIdx ->
+            val idx = playOrder[orderIdx]
+            if (idx >= insertAt) idx + additions.size else idx
+        }
+        val newIndices = IntArray(additions.size) { insertAt + it }.toMutableList()
+        newIndices.shuffle(Random(System.nanoTime()))
+        playOrder = shiftedExisting + newIndices.toIntArray()
+        orderCursor = playOrder.indexOf(currentIndex).coerceAtLeast(0)
     }
 
     fun removeFromQueue(indices: IntArray): QueueRemovalResult = synchronized(lock) {
@@ -86,7 +102,16 @@ internal class QueueState {
     fun setCurrentIndex(index: Int): Boolean = synchronized(lock) {
         if (index !in items.indices) return@synchronized false
         currentIndex = index
-        rebuildOrder()
+        if (!isValidPlayOrder(playOrder, items.size)) {
+            rebuildOrder()
+        } else {
+            val cursor = playOrder.indexOf(index)
+            if (cursor >= 0) {
+                orderCursor = cursor
+            } else {
+                rebuildOrder()
+            }
+        }
         true
     }
 
@@ -201,6 +226,17 @@ internal class QueueState {
             ShuffleOrder.natural(items.size)
         }
         orderCursor = playOrder.indexOf(currentIndex).coerceAtLeast(0)
+    }
+
+    private fun isValidPlayOrder(order: IntArray, expectedSize: Int): Boolean {
+        if (order.size != expectedSize) return false
+        val seen = BooleanArray(expectedSize)
+        order.forEach { index ->
+            if (index !in 0 until expectedSize) return false
+            if (seen[index]) return false
+            seen[index] = true
+        }
+        return true
     }
 }
 

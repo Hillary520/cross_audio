@@ -30,6 +30,7 @@ internal class SegmentTrackDecoder16(
     private val drmSessionManager: DrmSessionManager?,
     private val manifestInitDataBase64: String?,
     private val onSegmentFetched: (String, Long) -> Unit,
+    private val onSourceInfo: (mimeType: String, bitrateKbps: Int?) -> Unit,
     private val onFormat: (PcmFormat, durationUs: Long) -> Unit,
     private val onError: (Throwable) -> Unit,
 ) {
@@ -97,6 +98,7 @@ internal class SegmentTrackDecoder16(
                 drmRequest = item.drm,
                 drmMediaKey = item.cacheGroupKey?.takeIf { it.isNotBlank() } ?: item.uri.toString(),
                 manifestInitDataBase64 = manifestInitDataBase64,
+                onSourceInfo = onSourceInfo,
                 onFormat = onFormat,
                 onError = onError,
             )

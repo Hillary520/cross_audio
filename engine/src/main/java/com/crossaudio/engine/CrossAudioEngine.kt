@@ -115,6 +115,7 @@ class CrossAudioEngine(
     @Volatile internal var streamingConfig: StreamingConfig = StreamingConfig()
     @Volatile internal var qualityCap: QualityCap = QualityCap.AUTO
     @Volatile internal var qualityInfo: QualityInfo = QualityInfo(sourceType = SourceType.PROGRESSIVE)
+    @Volatile internal var currentMimeType: String? = null
     @Volatile private var drmConfig: DrmGlobalConfig = DrmGlobalConfig()
     @Volatile private var audioProcessingConfig: AudioProcessingConfig = AudioProcessingConfig()
     private val rebufferCount = AtomicInteger(0)
@@ -155,6 +156,16 @@ class CrossAudioEngine(
     override fun setStreamingConfig(config: StreamingConfig) { streamingConfig = config; qualityCap = config.qualityCap }
     override fun setQualityCap(cap: QualityCap) { qualityCap = cap; qualityInfo = qualityInfo.copy(sourceType = qualityInfo.sourceType) }
     override fun currentQuality(): QualityInfo = qualityInfo
+    fun currentStreamInfo(): StreamInfo {
+        val q = qualityInfo
+        return StreamInfo(
+            sourceType = q.sourceType,
+            fileType = inferFileType(currentMimeType, q.representationId),
+            mimeType = currentMimeType,
+            bitrateKbps = q.bitrateKbps,
+            streamId = q.representationId,
+        )
+    }
 
     override fun preloadManifest(item: MediaItem) {
         if (item.sourceType == SourceType.PROGRESSIVE) return
@@ -225,4 +236,34 @@ class CrossAudioEngine(
     private fun cancelTransitionsSync(cancelPreload: Boolean) = cancelTransitionsSyncImpl(cancelPreload)
     private fun cancelPreloadSync() = cancelPreloadSyncImpl()
     internal fun debugSnapshot(): String = debugSnapshotImpl()
+
+    private fun inferFileType(mimeType: String?, streamId: String?): String? {
+        val mime = mimeType?.trim()?.lowercase().orEmpty()
+        if (mime.isNotBlank()) {
+            return when {
+                mime.contains("flac") -> "FLAC"
+                mime.contains("mpeg") || mime.contains("mp3") -> "MP3"
+                mime.contains("aac") -> "AAC"
+                mime.contains("mp4a") || mime.contains("m4a") -> "M4A"
+                mime.contains("opus") -> "OPUS"
+                mime.contains("ogg") -> "OGG"
+                mime.contains("wav") -> "WAV"
+                mime.startsWith("audio/") -> mime.substringAfter("audio/").uppercase()
+                else -> null
+            }
+        }
+        val lowerPath = streamId?.substringBefore('?')?.lowercase().orEmpty()
+        return when {
+            lowerPath.endsWith(".flac") -> "FLAC"
+            lowerPath.endsWith(".mp3") -> "MP3"
+            lowerPath.endsWith(".m4a") || lowerPath.endsWith(".mp4") -> "M4A"
+            lowerPath.endsWith(".aac") -> "AAC"
+            lowerPath.endsWith(".opus") -> "OPUS"
+            lowerPath.endsWith(".ogg") -> "OGG"
+            lowerPath.endsWith(".wav") -> "WAV"
+            lowerPath.endsWith(".m3u8") -> "HLS"
+            lowerPath.endsWith(".mpd") -> "DASH"
+            else -> null
+        }
+    }
 }

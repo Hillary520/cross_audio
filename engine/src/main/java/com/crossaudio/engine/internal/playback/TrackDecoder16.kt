@@ -32,6 +32,7 @@ internal class TrackDecoder16(
     private val drmRequest: DrmRequest? = null,
     private val drmMediaKey: String? = null,
     private val manifestInitDataBase64: String? = null,
+    private val onSourceInfo: (mimeType: String, bitrateKbps: Int?) -> Unit = { _, _ -> },
     private val onFormat: (PcmFormat, durationUs: Long) -> Unit,
     private val onError: (Throwable) -> Unit,
 ) {
@@ -59,6 +60,11 @@ internal class TrackDecoder16(
 
             val mime = trackFormat.getString(MediaFormat.KEY_MIME)
                 ?: throw IllegalArgumentException("Missing MIME type for source=$source")
+            val bitrateKbps = runCatching {
+                if (!trackFormat.containsKey(MediaFormat.KEY_BIT_RATE)) null
+                else trackFormat.getInteger(MediaFormat.KEY_BIT_RATE).takeIf { it > 0 }?.div(1_000)
+            }.getOrNull()
+            onSourceInfo(mime, bitrateKbps)
 
             val durationUs = if (trackFormat.containsKey(MediaFormat.KEY_DURATION)) {
                 trackFormat.getLong(MediaFormat.KEY_DURATION)

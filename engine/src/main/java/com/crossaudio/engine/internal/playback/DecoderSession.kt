@@ -25,6 +25,7 @@ internal class DecoderSession(
     startPositionMs: Long,
     outputSampleRate: Int,
     capacitySamples: Int,
+    onSourceInfo: (mimeType: String, bitrateKbps: Int?) -> Unit = { _, _ -> },
     onFormat: (PcmFormat, Long) -> Unit,
     onError: (Throwable) -> Unit,
 ) {
@@ -50,6 +51,7 @@ internal class DecoderSession(
                 drmSessionManager = drmSessionManager,
                 manifestInitDataBase64 = manifestInitDataBase64,
                 onSegmentFetched = onSegmentFetched,
+                onSourceInfo = onSourceInfo,
                 onFormat = onFormat,
                 onError = onError,
             ),
@@ -68,6 +70,7 @@ internal class DecoderSession(
                 drmRequest = item.drm,
                 drmMediaKey = item.cacheGroupKey?.takeIf { it.isNotBlank() } ?: item.uri.toString(),
                 manifestInitDataBase64 = manifestInitDataBase64,
+                onSourceInfo = onSourceInfo,
                 onFormat = onFormat,
                 onError = onError,
             ),

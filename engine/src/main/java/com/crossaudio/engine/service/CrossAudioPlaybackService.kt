@@ -32,6 +32,7 @@ import com.crossaudio.engine.PlayerState
 import com.crossaudio.engine.QualityCap
 import com.crossaudio.engine.QueueMutableEngine
 import com.crossaudio.engine.ShuffleEngine
+import com.crossaudio.engine.StreamInfo
 import com.crossaudio.engine.StreamingConfig
 import com.crossaudio.engine.platform.PlatformPlayerEngine
 import kotlinx.coroutines.CoroutineScope
@@ -138,6 +139,8 @@ class CrossAudioPlaybackService : Service() {
     fun removeFromQueue(indices: IntArray) = (engine as? QueueMutableEngine)?.removeFromQueue(indices)
     fun moveQueueItem(fromIndex: Int, toIndex: Int) = (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
     fun clearQueue() = (engine as? QueueMutableEngine)?.clearQueue()
+    fun queuePlaybackOrder(): IntArray = core.queueState.snapshot().playOrder
+    fun currentStreamInfo(): StreamInfo = core.currentStreamInfo()
     fun setShuffleEnabled(enabled: Boolean) = (engine as? ShuffleEngine)?.setShuffleEnabled(enabled)
     fun isShuffleEnabled(): Boolean = (engine as? ShuffleEngine)?.isShuffleEnabled() == true
     fun pinForOffline(item: MediaItem) = (engine as? CacheEngine)?.pinForOffline(item)

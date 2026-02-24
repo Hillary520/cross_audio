@@ -37,6 +37,11 @@ internal fun CrossAudioEngine.stopInternalImpl(updateState: Boolean) {
     concatSource = null
     fadeOutSource = null
     renderMode = CrossAudioEngine.RenderMode.PIPE
+    currentMimeType = null
+    qualityInfo = qualityInfo.copy(
+        bitrateKbps = null,
+        representationId = null,
+    )
 
     if (updateState) {
         val item = queue.getOrNull(index)
@@ -63,10 +68,17 @@ internal fun CrossAudioEngine.startCurrentTrackImpl(
     val sourceType = (resolved as? ResolvedMediaSource.RemoteHttp)?.sourceType
         ?: manifestResolver.detectSourceType(item)
     val manifestInitDataBase64 = (resolved as? ResolvedMediaSource.RemoteHttp)?.manifestInitDataBase64
+    val streamId = when (resolved) {
+        is ResolvedMediaSource.RemoteHttp -> resolved.url
+        is ResolvedMediaSource.LocalFile -> resolved.path
+        is ResolvedMediaSource.LocalUri -> resolved.uri.toString()
+    }
     qualityInfo = qualityInfo.copy(
         sourceType = sourceType,
-        representationId = (resolved as? ResolvedMediaSource.RemoteHttp)?.url,
+        representationId = streamId,
+        bitrateKbps = null,
     )
+    currentMimeType = null
     when (resolved) {
         is ResolvedMediaSource.LocalFile -> emitTelemetry(EngineTelemetryEvent.CacheHit(item.cacheKey ?: item.uri.toString()))
         is ResolvedMediaSource.RemoteHttp -> emitTelemetry(EngineTelemetryEvent.CacheMiss(item.cacheKey ?: item.uri.toString()))
@@ -88,6 +100,14 @@ internal fun CrossAudioEngine.startCurrentTrackImpl(
         startPositionMs = startPositionMs,
         outputSampleRate = 48000,
         capacitySamples = currentPipeCapacitySamples,
+        onSourceInfo = onSource@{ mimeType, bitrateKbps ->
+            if (activeGeneration != gen) return@onSource
+            currentMimeType = mimeType
+            qualityInfo = qualityInfo.copy(
+                bitrateKbps = bitrateKbps ?: qualityInfo.bitrateKbps,
+            )
+            Log.d(tag, "Source info mime=$mimeType bitrateKbps=${bitrateKbps ?: "unknown"}")
+        },
         onFormat = onFormat@{ fmt, durUs ->
             val session = sessionRef ?: return@onFormat
             if (activeGeneration != gen) return@onFormat
@@ -157,7 +177,7 @@ internal fun CrossAudioEngine.startNextTrackIfNeededImpl() {
     syncQueueFromState()
     if (nextDecoder != null) return
     val ni = queueState.peekNextIndexForAuto()
-    if (ni == null || ni == index) return
+    if (ni == null) return
     val nextItem = queue.getOrNull(ni) ?: return
     nextQueueIndex = ni
 

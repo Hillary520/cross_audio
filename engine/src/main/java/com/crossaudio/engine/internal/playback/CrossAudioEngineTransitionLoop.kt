@@ -49,7 +49,7 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
             val fadeMs = crossfadeDurationMs.get()
             val autoNextIndex = queueState.peekNextIndexForAuto()
             val cp = currentPipe
-            if (fadeMs == 0L && currentDurationUs > 0 && autoNextIndex != null && autoNextIndex != index) {
+            if (fadeMs == 0L && currentDurationUs > 0 && autoNextIndex != null) {
                 if (TransitionController.shouldPreload(posMs, currentDurationUs, fadeMs)) {
                     startNextTrackIfNeededImpl()
                 }
@@ -108,7 +108,7 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
                     }
                 }
             }
-            if (fadeMs > 0 && currentDurationUs > 0 && autoNextIndex != null && autoNextIndex != index) {
+            if (fadeMs > 0 && currentDurationUs > 0 && autoNextIndex != null) {
                 val startFadeMs = TransitionController.crossfadeStartMs(currentDurationUs, fadeMs)
                 if (TransitionController.shouldPreload(posMs, currentDurationUs, fadeMs)) {
                     startNextTrackIfNeededImpl()
