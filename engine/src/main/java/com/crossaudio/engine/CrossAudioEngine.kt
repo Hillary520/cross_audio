@@ -140,6 +140,7 @@ class CrossAudioEngine(
     override fun seekTo(positionMs: Long) { seekToImpl(positionMs) }
     override fun skipNext() { skipNextImpl() }
     override fun skipPrevious() { skipPreviousImpl() }
+    override fun skipToIndex(index: Int) { skipToIndexImpl(index) }
     override fun setCrossfadeDurationMs(durationMs: Long) { crossfadeDurationMs.set(durationMs.coerceAtLeast(0L)) }
     override fun setRepeatMode(mode: RepeatMode) { queueState.setRepeatMode(mode); syncQueueFromState(); repeatMode = mode }
     override fun setCrossfadeDebugPanning(enabled: Boolean) { debugCrossfadePan = enabled; Log.d(tag, "Debug crossfade pan set: $enabled") }

@@ -165,6 +165,7 @@ class CrossAudioPlaybackService : Service() {
     fun moveQueueItem(fromIndex: Int, toIndex: Int) = (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
     fun clearQueue() = (engine as? QueueMutableEngine)?.clearQueue()
     fun queuePlaybackOrder(): IntArray = core.queueState.snapshot().playOrder
+    fun skipToIndex(index: Int) = engine.skipToIndex(index)
     fun currentStreamInfo(): StreamInfo = core.currentStreamInfo()
     fun setShuffleEnabled(enabled: Boolean) = (engine as? ShuffleEngine)?.setShuffleEnabled(enabled)
     fun isShuffleEnabled(): Boolean = (engine as? ShuffleEngine)?.isShuffleEnabled() == true

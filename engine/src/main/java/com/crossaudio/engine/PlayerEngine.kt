@@ -12,6 +12,7 @@ interface PlayerEngine {
     fun seekTo(positionMs: Long)
     fun skipNext()
     fun skipPrevious()
+    fun skipToIndex(index: Int)
 
     fun setCrossfadeDurationMs(durationMs: Long)
 

@@ -147,6 +147,7 @@ class PlatformPlayerEngine(
     override fun seekTo(positionMs: Long) = delegate.seekTo(positionMs)
     override fun skipNext() = delegate.skipNext()
     override fun skipPrevious() = delegate.skipPrevious()
+    override fun skipToIndex(index: Int) = delegate.skipToIndex(index)
     override fun setCrossfadeDurationMs(durationMs: Long) = delegate.setCrossfadeDurationMs(durationMs)
     override fun setRepeatMode(mode: RepeatMode) = delegate.setRepeatMode(mode)
 

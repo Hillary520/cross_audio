@@ -143,6 +143,35 @@ internal fun CrossAudioEngine.skipPreviousImpl() {
     emitter.trackTransition(from, ni, TrackTransitionReason.SKIP)
 }
 
+internal fun CrossAudioEngine.skipToIndexImpl(targetIndex: Int) {
+    syncQueueFromState()
+    if (queue.isEmpty()) {
+        Log.d(tag, "skipToIndex ignored: empty queue")
+        return
+    }
+    if (targetIndex !in queue.indices) {
+        Log.d(tag, "skipToIndex ignored: index=$targetIndex out of range size=${queue.size}")
+        return
+    }
+    if (targetIndex == index) {
+        // Already at this index — just restart from the beginning
+        seekToImpl(0L)
+        return
+    }
+    inhibitTransitions = true
+    cancelTransitionsSyncImpl(cancelPreload = true)
+    val from = index
+    val ok = queueState.setCurrentIndex(targetIndex)
+    if (!ok) {
+        Log.d(tag, "skipToIndex failed: setCurrentIndex($targetIndex) returned false")
+        return
+    }
+    syncQueueFromState()
+    Log.d(tag, "skipToIndex from=$from to=$targetIndex size=${queue.size}")
+    restartFromSkippedIndex(shouldPlay = shouldKeepPlayingAfterSkip())
+    emitter.trackTransition(from, targetIndex, TrackTransitionReason.SKIP)
+}
+
 private fun CrossAudioEngine.shouldKeepPlayingAfterSkip(): Boolean {
     return when (_state.value) {
         is PlayerState.Playing,
