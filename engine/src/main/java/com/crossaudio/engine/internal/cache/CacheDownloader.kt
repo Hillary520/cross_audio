@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 internal class CacheDownloader {
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor = Executors.newFixedThreadPool(2)
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
 
     fun enqueue(
@@ -27,8 +27,8 @@ internal class CacheDownloader {
                 if (tmpFile.exists()) tmpFile.delete()
 
                 val conn = (URL(item.uri.toString()).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 15_000
-                    readTimeout = 20_000
+                    connectTimeout = 8_000
+                    readTimeout = 12_000
                     instanceFollowRedirects = true
                     requestMethod = "GET"
                     item.headers.forEach { (k, v) -> setRequestProperty(k, v) }

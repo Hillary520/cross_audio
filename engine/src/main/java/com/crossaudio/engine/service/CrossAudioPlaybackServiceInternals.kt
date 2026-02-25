@@ -30,8 +30,9 @@ private const val ARTWORK_DECODE_TARGET_PX = 768
 private const val IDLE_STOP_DELAY_MS = 30_000L
 /** Max consecutive errors before giving up and stopping. */
 private const val MAX_CONSECUTIVE_ERRORS = 3
-/** How long to keep foreground status after pausing before demoting. */
-private const val PAUSE_FOREGROUND_TIMEOUT_MS = 5L * 60 * 1_000 // 5 minutes
+/** How long to keep foreground status after pausing before demoting.
+ *  30 minutes — long enough to survive phone calls, WhatsApp calls, etc. */
+private const val PAUSE_FOREGROUND_TIMEOUT_MS = 30L * 60 * 1_000 // 30 minutes
 
 internal fun CrossAudioPlaybackService.updateSessionThrottledImpl(st: PlayerState) {
     val now = android.os.SystemClock.uptimeMillis()
@@ -141,23 +142,33 @@ internal fun CrossAudioPlaybackService.updateNotificationThrottledImpl(st: Playe
     if (st is PlayerState.Playing && !isForeground) {
         startForegroundCompatImpl(CrossAudioPlaybackService.NOTIF_ID, n)
         isForeground = true
+    } else if (st is PlayerState.Paused) {
+        // STAY FOREGROUND while paused — this is critical for surviving phone
+        // calls, WhatsApp calls, and other audio-focus interruptions.
+        // The notification's `ongoing` flag is already false for paused, so the
+        // user can swipe it away.  We only *actually* drop foreground after the
+        // long PAUSE_FOREGROUND_TIMEOUT_MS timeout below.
+        if (!isForeground) {
+            // Re-promote to foreground (e.g. if previously detached).
+            startForegroundCompatImpl(CrossAudioPlaybackService.NOTIF_ID, n)
+            isForeground = true
+        } else {
+            notificationManager.notify(CrossAudioPlaybackService.NOTIF_ID, n)
+        }
+        // Release WakeLocks — we're paused, no need to hold CPU/WiFi.
+        releaseWakeLocks()
+        // Schedule eventual full stop after a long timeout.
+        pauseForegroundJob = scope.launch {
+            delay(PAUSE_FOREGROUND_TIMEOUT_MS)
+            android.util.Log.d("CrossAudioService", "Pause foreground timeout — stopping service.")
+            if (isForeground) {
+                stopForeground(true)
+                isForeground = false
+            }
+            stopSelf()
+        }
     } else {
         notificationManager.notify(CrossAudioPlaybackService.NOTIF_ID, n)
-        if (st is PlayerState.Paused && isForeground) {
-            // Keep foreground for a while so the system doesn't kill us.
-            // Use STOP_FOREGROUND_DETACH to keep the notification visible
-            // but allow it to be swiped away.
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-            isForeground = false
-            // Release WakeLocks — we're paused, no need to hold CPU/WiFi.
-            releaseWakeLocks()
-            // Schedule full demotion after a timeout.
-            pauseForegroundJob = scope.launch {
-                delay(PAUSE_FOREGROUND_TIMEOUT_MS)
-                android.util.Log.d("CrossAudioService", "Pause foreground timeout — stopping service.")
-                stopSelf()
-            }
-        }
     }
 
     lastNotifKind = kind
