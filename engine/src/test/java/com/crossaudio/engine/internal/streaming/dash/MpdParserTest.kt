@@ -91,4 +91,73 @@ class MpdParserTest {
         assertEquals("init.mp4", parsed.representations[0].initializationUrl)
         assertEquals(listOf("seg1.m4s"), parsed.representations[0].segmentUrls)
     }
+
+    @Test
+    fun `parses dynamic manifest update hints`() {
+        val xml = """
+            <MPD type="dynamic" minimumUpdatePeriod="PT2.5S">
+              <Period>
+                <AdaptationSet mimeType="audio/mp4">
+                  <Representation id="a1" bandwidth="128000">
+                    <BaseURL>audio/</BaseURL>
+                    <SegmentList>
+                      <SegmentURL media="seg1.m4s" />
+                    </SegmentList>
+                  </Representation>
+                </AdaptationSet>
+              </Period>
+            </MPD>
+        """.trimIndent()
+
+        val parsed = MpdParser.parse(xml)
+
+        assertTrue(parsed.isDynamic)
+        assertEquals(2_500L, parsed.minimumUpdatePeriodMs)
+    }
+
+    @Test
+    fun `expands segment template with Number placeholder`() {
+        val xml = """
+            <MPD mediaPresentationDuration="PT12S">
+              <Period>
+                <AdaptationSet mimeType="audio/mp4">
+                  <Representation id="a1" bandwidth="128000">
+                    <BaseURL>audio/</BaseURL>
+                    <SegmentTemplate initialization="init-${'$'}RepresentationID${'$'}.mp4" media="chunk-${'$'}Number%03d${'$'}.m4s" timescale="1" duration="4" startNumber="10"/>
+                  </Representation>
+                </AdaptationSet>
+              </Period>
+            </MPD>
+        """.trimIndent()
+
+        val parsed = MpdParser.parse(xml)
+        val rep = parsed.representations.first()
+
+        assertEquals("init-a1.mp4", rep.initializationUrl)
+        assertEquals(listOf("chunk-010.m4s", "chunk-011.m4s", "chunk-012.m4s"), rep.segmentUrls)
+    }
+
+    @Test
+    fun `expands segment template timeline with Time placeholder`() {
+        val xml = """
+            <MPD>
+              <Period>
+                <AdaptationSet mimeType="audio/mp4">
+                  <Representation id="a1" bandwidth="128000">
+                    <SegmentTemplate media="seg-${'$'}Time${'$'}.m4s" initialization="init.mp4" timescale="1" startNumber="1">
+                      <SegmentTimeline>
+                        <S t="0" d="2" r="2"/>
+                      </SegmentTimeline>
+                    </SegmentTemplate>
+                  </Representation>
+                </AdaptationSet>
+              </Period>
+            </MPD>
+        """.trimIndent()
+
+        val parsed = MpdParser.parse(xml)
+        val rep = parsed.representations.first()
+
+        assertEquals(listOf("seg-0.m4s", "seg-2.m4s", "seg-4.m4s"), rep.segmentUrls)
+    }
 }

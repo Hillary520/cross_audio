@@ -5,6 +5,8 @@ import com.crossaudio.engine.internal.streaming.SegmentRef
 internal data class HlsMediaPlaylist(
     val targetDurationSec: Int,
     val segments: List<SegmentRef>,
+    val mediaSequence: Long = 0L,
+    val isEndList: Boolean = false,
     val initializationSegmentUri: String? = null,
     val sessionKeyPsshBase64: String? = null,
 )
@@ -17,6 +19,8 @@ internal object HlsMediaParser {
         }
 
         var targetDurationSec = 0
+        var mediaSequence = 0L
+        var isEndList = false
         var pendingDurationUs = 0L
         val segments = mutableListOf<SegmentRef>()
         var initializationSegmentUri: String? = null
@@ -26,6 +30,12 @@ internal object HlsMediaParser {
             when {
                 line.startsWith("#EXT-X-TARGETDURATION:") -> {
                     targetDurationSec = line.substringAfter(':').toIntOrNull() ?: 0
+                }
+                line.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> {
+                    mediaSequence = line.substringAfter(':').toLongOrNull() ?: 0L
+                }
+                line.startsWith("#EXT-X-ENDLIST") -> {
+                    isEndList = true
                 }
                 line.startsWith("#EXT-X-MAP:") -> {
                     if (initializationSegmentUri == null) {
@@ -54,6 +64,8 @@ internal object HlsMediaParser {
         return HlsMediaPlaylist(
             targetDurationSec = targetDurationSec,
             segments = segments,
+            mediaSequence = mediaSequence,
+            isEndList = isEndList,
             initializationSegmentUri = initializationSegmentUri,
             sessionKeyPsshBase64 = sessionKeyPsshBase64,
         )

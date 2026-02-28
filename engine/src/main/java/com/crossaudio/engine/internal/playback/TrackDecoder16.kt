@@ -32,14 +32,17 @@ internal class TrackDecoder16(
     private val drmRequest: DrmRequest? = null,
     private val drmMediaKey: String? = null,
     private val manifestInitDataBase64: String? = null,
+    private val markEosOnCompletion: Boolean = true,
     private val onSourceInfo: (mimeType: String, bitrateKbps: Int?) -> Unit = { _, _ -> },
     private val onFormat: (PcmFormat, durationUs: Long) -> Unit,
     private val onError: (Throwable) -> Unit,
 ) {
     private val tag = "TrackDecoder16"
     @Volatile private var thread: Thread? = null
+    @Volatile private var failure: Throwable? = null
     fun start() { thread = Thread({ runLoop() }, "cross-audio-decode").apply { start() } }
     fun join(timeoutMs: Long) { thread?.join(timeoutMs) }
+    fun failureOrNull(): Throwable? = failure
 
     private fun runLoop() {
         var extractor: MediaExtractor? = null
@@ -241,10 +244,17 @@ internal class TrackDecoder16(
                 }
             }
 
-            pipe.markEos()
+            if (markEosOnCompletion) {
+                pipe.markEos()
+            }
         } catch (t: Throwable) {
             if (t is InterruptedException) return
-            Log.e(tag, "Decode error", t); runCatching { pipe.markEos() }; onError(t)
+            failure = t
+            Log.e(tag, "Decode error", t)
+            if (markEosOnCompletion) {
+                runCatching { pipe.markEos() }
+            }
+            onError(t)
         } finally {
             cleanupTrackDecoder(codec, extractor, activeDrmSession, drmSessionManager)
         }

@@ -42,12 +42,9 @@ internal class DrmSessionManager(
         if (!globalConfig.allowOfflineLicenses) {
             return OfflineLicenseResult.Failure("Offline licenses are disabled by config")
         }
-        if (request.scheme != DrmScheme.WIDEVINE) {
-            return OfflineLicenseResult.Failure("Unsupported DRM scheme: ${request.scheme}")
-        }
 
         request.offlineKeySetId?.takeIf { it.isNotBlank() }?.let { keySetId ->
-            val licenseId = "wv_${System.currentTimeMillis()}"
+            val licenseId = buildLicenseId(request.scheme)
             store.put(
                 OfflineLicenseRecord(
                     licenseId = licenseId,
@@ -95,7 +92,7 @@ internal class DrmSessionManager(
             closeDrm(drm)
 
             val keySetB64 = Base64.encodeToString(keySet, Base64.NO_WRAP)
-            val licenseId = "wv_${System.currentTimeMillis()}"
+            val licenseId = buildLicenseId(request.scheme)
             store.put(
                 OfflineLicenseRecord(
                     licenseId = licenseId,
@@ -122,8 +119,6 @@ internal class DrmSessionManager(
         request: DrmRequest,
         manifestInitDataBase64: String? = null,
     ): ActiveDrmSession {
-        require(request.scheme == DrmScheme.WIDEVINE) { "Unsupported DRM scheme: ${request.scheme}" }
-
         val uuid = UUID.fromString(request.scheme.uuidString)
         val drm = MediaDrm(uuid)
         var sessionId: ByteArray? = null
@@ -136,7 +131,14 @@ internal class DrmSessionManager(
 
             val restoredFromLicenseId = request.offlineLicenseId
                 ?.takeIf { it.isNotBlank() }
-                ?.let { id -> store.get(id)?.keySetIdB64 to id }
+                ?.let { id ->
+                    val record = store.get(id) ?: return@let null
+                    val recordScheme = runCatching { DrmScheme.valueOf(record.scheme) }.getOrNull()
+                    if (recordScheme != null && recordScheme != request.scheme) {
+                        throw IllegalArgumentException("Offline license $id uses $recordScheme but request uses ${request.scheme}")
+                    }
+                    record.keySetIdB64 to id
+                }
             val restoredFromRequestKeySet = request.offlineKeySetId
                 ?.takeIf { it.isNotBlank() }
                 ?.let { it to null }
@@ -190,7 +192,8 @@ internal class DrmSessionManager(
     fun releaseOfflineLicense(licenseId: String) {
         val record = store.get(licenseId) ?: return
         val releaseResult = runCatching {
-            val uuid = UUID.fromString(DrmScheme.WIDEVINE.uuidString)
+            val scheme = runCatching { DrmScheme.valueOf(record.scheme) }.getOrDefault(DrmScheme.WIDEVINE)
+            val uuid = UUID.fromString(scheme.uuidString)
             val keySet = Base64.decode(record.keySetIdB64, Base64.DEFAULT)
             val drm = MediaDrm(uuid)
             try {
@@ -217,6 +220,15 @@ internal class DrmSessionManager(
             @Suppress("DEPRECATION")
             runCatching { drm.release() }
         }
+    }
+
+    private fun buildLicenseId(scheme: DrmScheme): String {
+        val prefix = when (scheme) {
+            DrmScheme.WIDEVINE -> "wv"
+            DrmScheme.PLAYREADY -> "pr"
+            DrmScheme.CLEAR_KEY -> "ck"
+        }
+        return "${prefix}_${System.currentTimeMillis()}"
     }
 
     private fun executeLicenseRequestWithRetry(

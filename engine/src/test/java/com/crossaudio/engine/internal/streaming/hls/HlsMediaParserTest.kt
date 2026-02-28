@@ -2,6 +2,7 @@ package com.crossaudio.engine.internal.streaming.hls
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HlsMediaParserTest {
@@ -36,5 +37,21 @@ class HlsMediaParserTest {
         """.trimIndent()
         val parsed = HlsMediaParser.parse(text)
         assertNull(parsed.sessionKeyPsshBase64)
+    }
+
+    @Test
+    fun `parses media sequence and endlist`() {
+        val text = """
+            #EXTM3U
+            #EXT-X-MEDIA-SEQUENCE:153
+            #EXTINF:4.0,
+            seg153.ts
+            #EXT-X-ENDLIST
+        """.trimIndent()
+
+        val parsed = HlsMediaParser.parse(text)
+
+        assertEquals(153L, parsed.mediaSequence)
+        assertTrue(parsed.isEndList)
     }
 }

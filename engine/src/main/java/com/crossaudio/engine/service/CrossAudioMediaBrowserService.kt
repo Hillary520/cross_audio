@@ -93,17 +93,25 @@ class CrossAudioMediaBrowserService : MediaBrowserServiceCompat() {
         result: Result<MutableList<MediaBrowserCompat.MediaItem>>,
     ) {
         val items = when (parentId) {
-            ROOT_ID -> mutableListOf(
-                browseItem(
-                    mediaId = ACTION_RESUME_ID,
-                    title = "Resume playback",
-                ),
-                browseItem(
-                    mediaId = QUEUE_NODE_ID,
-                    title = "Last queue",
-                    browsable = true,
-                ),
-            )
+            ROOT_ID -> {
+                val resumeSnapshot = CrossAudioBrowseCatalogStore.loadPlaybackSnapshot(this)
+                mutableListOf(
+                    browseItem(
+                        mediaId = ACTION_RESUME_ID,
+                        title = resumeTitle(resumeSnapshot),
+                        subtitle = resumeSubtitle(resumeSnapshot),
+                    ),
+                    browseItem(
+                        mediaId = ACTION_PLAY_QUEUE_FROM_START_ID,
+                        title = "Play queue from start",
+                    ),
+                    browseItem(
+                        mediaId = QUEUE_NODE_ID,
+                        title = "Last queue",
+                        browsable = true,
+                    ),
+                )
+            }
             QUEUE_NODE_ID -> {
                 val queue = CrossAudioBrowseCatalogStore.loadQueue(this)
                 queue.mapIndexed { index, item ->
@@ -122,10 +130,34 @@ class CrossAudioMediaBrowserService : MediaBrowserServiceCompat() {
     private fun handlePlayFromMediaId(mediaId: String?) {
         when {
             mediaId == ACTION_RESUME_ID -> {
+                val snapshot = CrossAudioBrowseCatalogStore.loadPlaybackSnapshot(this)
+                if (snapshot != null && snapshot.items.isNotEmpty()) {
+                    CrossAudioPlaybackService.start(
+                        context = this,
+                        action = CrossAudioPlaybackService.ACTION_PLAY,
+                    )
+                    return
+                }
                 CrossAudioPlaybackService.start(
                     context = this,
                     action = CrossAudioPlaybackService.ACTION_PLAY,
                 )
+            }
+            mediaId == ACTION_PLAY_QUEUE_FROM_START_ID -> {
+                val queue = CrossAudioBrowseCatalogStore.loadQueue(this)
+                if (queue.isNotEmpty()) {
+                    CrossAudioPlaybackService.start(
+                        context = this,
+                        action = CrossAudioPlaybackService.ACTION_PLAY,
+                        itemsJson = itemsJson(queue),
+                        replaceQueue = true,
+                    )
+                } else {
+                    CrossAudioPlaybackService.start(
+                        context = this,
+                        action = CrossAudioPlaybackService.ACTION_PLAY,
+                    )
+                }
             }
             mediaId?.startsWith("queue:") == true -> {
                 val startIndex = mediaId.substringAfter(':').toIntOrNull() ?: return
@@ -171,11 +203,13 @@ class CrossAudioMediaBrowserService : MediaBrowserServiceCompat() {
     private fun browseItem(
         mediaId: String,
         title: String,
+        subtitle: String? = null,
         browsable: Boolean = false,
     ): MediaBrowserCompat.MediaItem {
         val desc = MediaDescriptionCompat.Builder()
             .setMediaId(mediaId)
             .setTitle(title)
+            .setSubtitle(subtitle)
             .build()
         return MediaBrowserCompat.MediaItem(
             desc,
@@ -200,5 +234,20 @@ class CrossAudioMediaBrowserService : MediaBrowserServiceCompat() {
         private const val ROOT_ID = "crossaudio_root"
         private const val QUEUE_NODE_ID = "crossaudio_last_queue"
         private const val ACTION_RESUME_ID = "crossaudio_action_resume"
+        private const val ACTION_PLAY_QUEUE_FROM_START_ID = "crossaudio_action_play_queue_start"
+    }
+
+    private fun resumeTitle(snapshot: CrossAudioBrowseCatalogStore.PlaybackSnapshot?): String {
+        val item = snapshot?.items?.getOrNull(snapshot.currentIndex)
+        return item?.title?.takeIf { it.isNotBlank() }?.let { "Resume $it" } ?: "Resume playback"
+    }
+
+    private fun resumeSubtitle(snapshot: CrossAudioBrowseCatalogStore.PlaybackSnapshot?): String? {
+        val item = snapshot?.items?.getOrNull(snapshot.currentIndex) ?: return null
+        val pos = snapshot.positionMs.coerceAtLeast(0L)
+        val mins = pos / 60_000L
+        val secs = (pos / 1_000L) % 60L
+        val timeText = String.format("%d:%02d", mins, secs)
+        return item.artist?.takeIf { it.isNotBlank() }?.let { "$it • $timeText" } ?: timeText
     }
 }

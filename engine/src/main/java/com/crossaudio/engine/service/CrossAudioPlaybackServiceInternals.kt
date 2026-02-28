@@ -74,6 +74,7 @@ internal fun CrossAudioPlaybackService.updateSessionThrottledImpl(st: PlayerStat
     session.setPlaybackState(pb)
     session.setMetadata(buildSessionMetadata(item))
     requestArtworkIfNeeded(item)
+    persistPlaybackSnapshot(force = false)
 }
 
 internal fun CrossAudioPlaybackService.updateNotificationThrottledImpl(st: PlayerState) {

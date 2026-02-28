@@ -12,6 +12,13 @@ internal fun CrossAudioPlaybackService.onStartCommandImpl(intent: Intent?): Int 
         val parsedItems = parseItemsImpl(intent)
         if (replaceQueue && parsedItems.isNotEmpty()) {
             setQueue(parsedItems)
+        } else if (
+            intent.action == CrossAudioPlaybackService.ACTION_PLAY ||
+                intent.action == CrossAudioPlaybackService.ACTION_TOGGLE ||
+                intent.action == CrossAudioPlaybackService.ACTION_NEXT ||
+                intent.action == CrossAudioPlaybackService.ACTION_PREV
+        ) {
+            restoreQueueFromSnapshotIfEmpty()
         }
         if (intent.hasExtra(CrossAudioPlaybackService.EXTRA_CROSSFADE_MS)) {
             engine.setCrossfadeDurationMs(intent.getLongExtra(CrossAudioPlaybackService.EXTRA_CROSSFADE_MS, 0L))
@@ -20,6 +27,7 @@ internal fun CrossAudioPlaybackService.onStartCommandImpl(intent: Intent?): Int 
         when (intent.action) {
             CrossAudioPlaybackService.ACTION_PLAY -> {
                 ensureForegroundStartingImpl()
+                applyPendingResumePositionIfNeeded()
                 engine.play()
             }
             CrossAudioPlaybackService.ACTION_PAUSE -> engine.pause()
@@ -28,6 +36,7 @@ internal fun CrossAudioPlaybackService.onStartCommandImpl(intent: Intent?): Int 
                     is PlayerState.Playing -> engine.pause()
                     else -> {
                         ensureForegroundStartingImpl()
+                        applyPendingResumePositionIfNeeded()
                         engine.play()
                     }
                 }
@@ -80,6 +89,8 @@ internal fun CrossAudioPlaybackService.onStartCommandImpl(intent: Intent?): Int 
                     ?.let { evictCacheGroup(it) }
             }
         }
+    } else {
+        restoreQueueFromSnapshotIfEmpty()
     }
     return android.app.Service.START_STICKY
 }

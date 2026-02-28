@@ -94,8 +94,19 @@ internal fun CrossAudioEngine.startCurrentTrackImpl(
         streamingConfig = streamingConfig,
         drmSessionManager = drmManager,
         manifestInitDataBase64 = manifestInitDataBase64,
-        onSegmentFetched = { segmentUrl, bytes ->
+        onSegmentFetched = { segmentUrl, bytes, downloadMs ->
             cacheManager.recordSegmentResource(item, segmentUrl, bytes)
+            onSegmentDownloadSample(bytes = bytes, downloadMs = downloadMs)
+        },
+        onAdaptiveBitrateRequest = { availableBitrates, bufferedMs, currentBitrate ->
+            chooseAdaptiveBitrate(
+                availableBitratesKbps = availableBitrates,
+                bufferedMs = bufferedMs,
+                currentBitrateKbps = currentBitrate,
+            )
+        },
+        onAdaptiveSwitch = { streamUri, bitrateKbps, reason ->
+            onAdaptiveStreamSwitch(streamUri, bitrateKbps, reason)
         },
         startPositionMs = startPositionMs,
         outputSampleRate = 48000,
@@ -212,9 +223,18 @@ internal fun CrossAudioEngine.startNextTrackIfNeededImpl() {
         streamingConfig = streamingConfig,
         drmSessionManager = drmManager,
         manifestInitDataBase64 = manifestInitDataBase64,
-        onSegmentFetched = { segmentUrl, bytes ->
+        onSegmentFetched = { segmentUrl, bytes, downloadMs ->
             cacheManager.recordSegmentResource(nextItem, segmentUrl, bytes)
+            onSegmentDownloadSample(bytes = bytes, downloadMs = downloadMs)
         },
+        onAdaptiveBitrateRequest = { availableBitrates, bufferedMs, currentBitrate ->
+            chooseAdaptiveBitrate(
+                availableBitratesKbps = availableBitrates,
+                bufferedMs = bufferedMs,
+                currentBitrateKbps = currentBitrate,
+            )
+        },
+        onAdaptiveSwitch = { _, _, _ -> Unit },
         startPositionMs = 0L,
         outputSampleRate = 48000,
         capacitySamples = nextPipeCapacitySamples,

@@ -4,11 +4,13 @@ import android.content.Context
 import android.media.AudioManager
 import com.crossaudio.engine.internal.audio.PcmFormat
 import com.crossaudio.engine.internal.audio.PcmPipe16
+import com.crossaudio.engine.internal.abr.AbrController
 import com.crossaudio.engine.internal.cache.CacheManager
 import com.crossaudio.engine.internal.cache.PinManager
 import com.crossaudio.engine.internal.events.EventBus
 import com.crossaudio.engine.internal.events.EventEmitter
 import com.crossaudio.engine.internal.network.MediaSourceResolver
+import com.crossaudio.engine.internal.abr.BandwidthEstimator
 import com.crossaudio.engine.internal.playback.CrossfadeSource
 import com.crossaudio.engine.internal.playback.ConcatSource
 import com.crossaudio.engine.internal.playback.DecoderSession
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 import com.crossaudio.engine.internal.queue.QueueState
 import com.crossaudio.engine.internal.drm.DrmSessionManager
 import com.crossaudio.engine.internal.streaming.ManifestResolver
+import android.os.SystemClock
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -106,12 +109,51 @@ class CrossAudioEngine(
     internal val cacheManager = CacheManager(appContext, emitter)
     internal val pinManager = PinManager(cacheManager)
     internal val manifestResolver = ManifestResolver()
+    internal val bandwidthEstimator = BandwidthEstimator()
+    internal val runtimeAbrController = AbrController()
     internal val sourceResolver = MediaSourceResolver(
         cacheManager = cacheManager,
         manifestResolver = manifestResolver,
         qualityCapProvider = { qualityCap },
+        estimatedBandwidthKbpsProvider = { bandwidthEstimator.estimateKbps() },
+        startupBitrateKbpsProvider = { streamingConfig.startupBitrateKbps },
+        targetBufferMsProvider = { streamingConfig.targetBufferMs },
+        onManifestResolved = onManifestResolved@{ item, manifest, estimatedBandwidthKbps ->
+            val activeItem = queue.getOrNull(index)
+            val appliesToActive = activeItem?.uri == item.uri &&
+                activeItem.cacheKey == item.cacheKey &&
+                activeItem.cacheGroupKey == item.cacheGroupKey
+            if (!appliesToActive) return@onManifestResolved
+            val streamUri = manifest.selectedStreamUri
+            if (!streamUri.isNullOrBlank()) {
+                qualityInfo = qualityInfo.copy(
+                    sourceType = manifest.sourceType,
+                    representationId = streamUri,
+                )
+            }
+            val selectedBitrateKbps = manifest.selectedBitrateKbps
+            if (selectedBitrateKbps != null && selectedBitrateKbps > 0) {
+                qualityInfo = qualityInfo.copy(
+                    sourceType = manifest.sourceType,
+                    bitrateKbps = selectedBitrateKbps,
+                )
+                emitTelemetry(
+                    EngineTelemetryEvent.AbrDecision(
+                        selectedBitrateKbps = selectedBitrateKbps,
+                        estimatedBandwidthKbps = estimatedBandwidthKbps
+                            ?: bandwidthEstimator.estimateKbps()
+                            ?: selectedBitrateKbps,
+                        reason = manifest.abrReason ?: if (estimatedBandwidthKbps == null) "startup_hint" else "estimate_target",
+                    ),
+                )
+            }
+        },
     )
     internal val drmManager = DrmSessionManager(appContext) { emitTelemetry(it) }
+    internal var lastBandwidthTelemetryMs: Long = 0L
+    internal var lastBandwidthEstimateKbps: Int = 0
+    internal var lastRuntimeAbrSelectedKbps: Int = 0
+    internal var lastRuntimeAbrEmitMs: Long = 0L
 
     @Volatile internal var streamingConfig: StreamingConfig = StreamingConfig()
     @Volatile internal var qualityCap: QualityCap = QualityCap.AUTO
@@ -233,6 +275,71 @@ class CrossAudioEngine(
     internal fun emitTelemetry(event: EngineTelemetryEvent) {
         telemetryAccumulator.onEvent(event)
         telemetryFlow.tryEmit(event)
+    }
+    internal fun onSegmentDownloadSample(bytes: Long, downloadMs: Long) {
+        bandwidthEstimator.addSample(bytes = bytes, downloadMs = downloadMs)
+        val estimatedKbps = bandwidthEstimator.estimateKbps() ?: return
+        val nowMs = SystemClock.elapsedRealtime()
+        val changedEnough = kotlin.math.abs(estimatedKbps - lastBandwidthEstimateKbps) >= 48
+        val intervalElapsed = nowMs - lastBandwidthTelemetryMs >= 3_000L
+        if (!changedEnough && !intervalElapsed) return
+        lastBandwidthEstimateKbps = estimatedKbps
+        lastBandwidthTelemetryMs = nowMs
+        emitTelemetry(
+            EngineTelemetryEvent.AbrDecision(
+                selectedBitrateKbps = qualityInfo.bitrateKbps ?: streamingConfig.startupBitrateKbps,
+                estimatedBandwidthKbps = estimatedKbps,
+                reason = "bandwidth_sample",
+            ),
+        )
+    }
+    internal fun chooseAdaptiveBitrate(
+        availableBitratesKbps: List<Int>,
+        bufferedMs: Long,
+        currentBitrateKbps: Int?,
+    ): Int? {
+        val available = availableBitratesKbps.filter { it > 0 }.distinct().sorted()
+        if (available.isEmpty()) return null
+        val estimated = bandwidthEstimator.estimateKbps() ?: streamingConfig.startupBitrateKbps
+        val decision = runtimeAbrController.chooseBitrate(
+            availableBitratesKbps = available,
+            estimatedBandwidthKbps = estimated,
+            bufferedMs = bufferedMs,
+            cap = qualityCap,
+        )
+        val selected = decision.selectedBitrateKbps
+        if (currentBitrateKbps != null && currentBitrateKbps == selected) {
+            return currentBitrateKbps
+        }
+        val nowMs = SystemClock.elapsedRealtime()
+        val shouldEmit = selected != lastRuntimeAbrSelectedKbps || (nowMs - lastRuntimeAbrEmitMs) >= 4_000L
+        if (shouldEmit) {
+            lastRuntimeAbrSelectedKbps = selected
+            lastRuntimeAbrEmitMs = nowMs
+            emitTelemetry(
+                EngineTelemetryEvent.AbrDecision(
+                    selectedBitrateKbps = selected,
+                    estimatedBandwidthKbps = estimated.coerceAtLeast(0),
+                    reason = "runtime_${decision.reason}",
+                ),
+            )
+        }
+        return selected
+    }
+
+    internal fun onAdaptiveStreamSwitch(streamUri: String, bitrateKbps: Int?, reason: String) {
+        qualityInfo = qualityInfo.copy(
+            representationId = streamUri,
+            bitrateKbps = bitrateKbps ?: qualityInfo.bitrateKbps,
+        )
+        val selected = bitrateKbps ?: qualityInfo.bitrateKbps ?: return
+        emitTelemetry(
+            EngineTelemetryEvent.AbrDecision(
+                selectedBitrateKbps = selected,
+                estimatedBandwidthKbps = bandwidthEstimator.estimateKbps() ?: selected,
+                reason = reason,
+            ),
+        )
     }
     private fun setRendererSource(mode: RenderMode, src: com.crossaudio.engine.internal.playback.RenderSource) = setRendererSourceImpl(mode, src)
     private fun cancelTransitionsSync(cancelPreload: Boolean) = cancelTransitionsSyncImpl(cancelPreload)

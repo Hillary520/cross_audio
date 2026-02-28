@@ -22,6 +22,7 @@ import androidx.media.session.MediaButtonReceiver
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.os.SystemClock
 import com.crossaudio.engine.CacheEngine
 import com.crossaudio.engine.CacheInfo
 import com.crossaudio.engine.CacheState
@@ -61,6 +62,7 @@ class CrossAudioPlaybackService : Service() {
     internal var lastNotifItemKey: String? = null
     internal var lastNotifUpdateMs: Long = 0L
     internal var lastSessionUpdateMs: Long = 0L
+    internal var lastSnapshotPersistMs: Long = 0L
     internal var lastUnderruns: Long = 0L
     internal var lastUnderrunLogMs: Long = 0L
     internal var effectSessionOpened: Boolean = false
@@ -84,6 +86,8 @@ class CrossAudioPlaybackService : Service() {
     internal var idleStopJob: Job? = null
     internal var pauseForegroundJob: Job? = null
     internal var consecutiveErrors: Int = 0
+    @Volatile internal var pendingResumePositionMs: Long? = null
+    @Volatile internal var pendingResumeIndex: Int = -1
 
     override fun onCreate() {
         super.onCreate()
@@ -156,28 +160,32 @@ class CrossAudioPlaybackService : Service() {
                 updateAudioEffectSession(lastPlayerState)
             }
         }
+
+        restoreQueueFromSnapshotIfEmpty()
     }
 
     override fun onBind(intent: Intent): IBinder = Binder(this)
     fun setQueue(items: List<MediaItem>, startIndex: Int = 0) {
+        clearPendingResume()
         engine.setQueue(items, startIndex)
-        persistQueueSnapshot()
+        persistPlaybackSnapshot(force = true)
     }
     fun addToQueue(items: List<MediaItem>, atIndex: Int? = null) {
         (engine as? QueueMutableEngine)?.addToQueue(items, atIndex)
-        persistQueueSnapshot()
+        persistPlaybackSnapshot(force = true)
     }
     fun removeFromQueue(indices: IntArray) {
         (engine as? QueueMutableEngine)?.removeFromQueue(indices)
-        persistQueueSnapshot()
+        persistPlaybackSnapshot(force = true)
     }
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
-        persistQueueSnapshot()
+        persistPlaybackSnapshot(force = true)
     }
     fun clearQueue() {
+        clearPendingResume()
         (engine as? QueueMutableEngine)?.clearQueue()
-        persistQueueSnapshot()
+        persistPlaybackSnapshot(force = true)
     }
     fun queuePlaybackOrder(): IntArray = core.queueState.snapshot().playOrder
     fun skipToIndex(index: Int) = engine.skipToIndex(index)
@@ -221,6 +229,7 @@ class CrossAudioPlaybackService : Service() {
         runCatching { pauseForegroundJob?.cancel() }
         runCatching { artworkLoadJob?.cancel() }
         runCatching { artworkCache.evictAll() }
+        runCatching { persistPlaybackSnapshot(force = true) }
         runCatching { closeAudioEffectSession() }
         runCatching { releaseWakeLocks() }
         runCatching { stopForeground(true) }
@@ -240,8 +249,69 @@ class CrossAudioPlaybackService : Service() {
     private fun servicePI(action: String): PendingIntent = servicePIImpl(action)
     private fun createNotificationChannel() = createNotificationChannelImpl()
     private fun startForegroundCompat(id: Int, n: Notification) = startForegroundCompatImpl(id, n)
-    private fun persistQueueSnapshot() {
-        CrossAudioBrowseCatalogStore.saveQueue(this, core.queueState.snapshot().items)
+    internal fun restoreQueueFromSnapshotIfEmpty(): Boolean {
+        val current = core.queueState.snapshot()
+        if (current.items.isNotEmpty()) return false
+        val snapshot = CrossAudioBrowseCatalogStore.loadPlaybackSnapshot(this) ?: return false
+        if (snapshot.items.isEmpty() || snapshot.currentIndex !in snapshot.items.indices) return false
+        engine.setQueue(snapshot.items, snapshot.currentIndex)
+        pendingResumeIndex = snapshot.currentIndex
+        pendingResumePositionMs = snapshot.positionMs.coerceAtLeast(0L)
+        return true
+    }
+
+    internal fun applyPendingResumePositionIfNeeded() {
+        val pendingPos = pendingResumePositionMs ?: return
+        val pendingIndex = pendingResumeIndex
+        if (pendingPos <= 0L) {
+            clearPendingResume()
+            return
+        }
+        if (lastPlayerState is PlayerState.Playing || lastPlayerState is PlayerState.Buffering) {
+            clearPendingResume()
+            return
+        }
+        val snapshot = core.queueState.snapshot()
+        if (pendingIndex !in snapshot.items.indices || snapshot.currentIndex != pendingIndex) {
+            clearPendingResume()
+            return
+        }
+        clearPendingResume()
+        engine.seekTo(pendingPos)
+    }
+
+    internal fun persistPlaybackSnapshot(force: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
+        if (!force && (now - lastSnapshotPersistMs) < 1_500L) return
+        lastSnapshotPersistMs = now
+
+        val queueSnapshot = core.queueState.snapshot()
+        if (queueSnapshot.items.isEmpty() || queueSnapshot.currentIndex !in queueSnapshot.items.indices) {
+            CrossAudioBrowseCatalogStore.clearPlaybackSnapshot(this)
+            CrossAudioBrowseCatalogStore.saveQueue(this, emptyList())
+            return
+        }
+        val pos = when (val st = engine.state.value) {
+            is PlayerState.Playing -> st.positionMs
+            is PlayerState.Paused -> st.positionMs
+            else -> sessionPositionMs
+        }.coerceAtLeast(0L)
+        val pendingPos = pendingResumePositionMs
+            ?.takeIf { pendingResumeIndex == queueSnapshot.currentIndex && it > 0L }
+            ?: 0L
+        val snapshotPos = maxOf(pos, pendingPos)
+        CrossAudioBrowseCatalogStore.saveQueue(this, queueSnapshot.items)
+        CrossAudioBrowseCatalogStore.savePlaybackSnapshot(
+            context = this,
+            items = queueSnapshot.items,
+            currentIndex = queueSnapshot.currentIndex,
+            positionMs = snapshotPos,
+        )
+    }
+
+    internal fun clearPendingResume() {
+        pendingResumeIndex = -1
+        pendingResumePositionMs = null
     }
 
     /** Acquire CPU and WiFi WakeLocks to keep playback alive during screen-off. */
