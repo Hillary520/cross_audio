@@ -57,14 +57,28 @@ internal class QueueState {
             return@synchronized
         }
 
-        // Keep existing shuffled order stable; only append newly inserted indices.
+        // Keep existing shuffled order stable. Explicit insertion is treated as
+        // "play next" semantics in shuffled playback and is placed right after
+        // the current cursor. Plain append keeps random order at the tail.
         val shiftedExisting = IntArray(playOrder.size) { orderIdx ->
             val idx = playOrder[orderIdx]
             if (idx >= insertAt) idx + additions.size else idx
         }
-        val newIndices = IntArray(additions.size) { insertAt + it }.toMutableList()
-        newIndices.shuffle(Random(System.nanoTime()))
-        playOrder = shiftedExisting + newIndices.toIntArray()
+        val newIndices = IntArray(additions.size) { insertAt + it }
+        playOrder = if (atIndex == null) {
+            val randomized = newIndices.toMutableList()
+            randomized.shuffle(Random(System.nanoTime()))
+            shiftedExisting + randomized.toIntArray()
+        } else {
+            val insertCursor = (orderCursor + 1).coerceIn(0, shiftedExisting.size)
+            IntArray(shiftedExisting.size + newIndices.size) { orderIdx ->
+                when {
+                    orderIdx < insertCursor -> shiftedExisting[orderIdx]
+                    orderIdx < insertCursor + newIndices.size -> newIndices[orderIdx - insertCursor]
+                    else -> shiftedExisting[orderIdx - newIndices.size]
+                }
+            }
+        }
         orderCursor = playOrder.indexOf(currentIndex).coerceAtLeast(0)
     }
 
