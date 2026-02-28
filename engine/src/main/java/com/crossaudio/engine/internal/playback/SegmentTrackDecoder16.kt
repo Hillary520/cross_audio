@@ -119,12 +119,30 @@ internal class SegmentTrackDecoder16(
         headers: Map<String, String>,
         sourceType: SourceType,
     ): List<String> {
+        val remote = source as? ResolvedMediaSource.RemoteHttp
+        val resolvedManifest = remote?.manifest
         val lowerUrl = selectedUrl.lowercase()
         if (sourceType == SourceType.HLS || lowerUrl.endsWith(".m3u8")) {
             val mediaText = fetcher.fetchText(selectedUrl, headers)
             val media = HlsMediaParser.parse(mediaText)
             if (media.segments.isEmpty()) return listOf(selectedUrl)
-            return media.segments.map { seg -> SegmentTimeline.resolveUri(selectedUrl, seg.uri) }
+            val segmentUrls = media.segments.map { seg -> SegmentTimeline.resolveUri(selectedUrl, seg.uri) }
+            val initUrl = media.initializationSegmentUri?.let { SegmentTimeline.resolveUri(selectedUrl, it) }
+            return buildList {
+                if (!initUrl.isNullOrBlank()) add(initUrl)
+                addAll(segmentUrls)
+            }
+        }
+        if (sourceType == SourceType.DASH || lowerUrl.endsWith(".mpd")) {
+            val base = resolvedManifest?.selectedStreamUri ?: selectedUrl
+            val initUrl = resolvedManifest?.selectedInitializationUri?.let { SegmentTimeline.resolveUri(base, it) }
+            val segmentUrls = resolvedManifest?.selectedSegmentUris.orEmpty()
+                .map { seg -> SegmentTimeline.resolveUri(base, seg) }
+            val assembled = buildList {
+                if (!initUrl.isNullOrBlank()) add(initUrl)
+                addAll(segmentUrls)
+            }
+            if (assembled.isNotEmpty()) return assembled
         }
         return listOf(selectedUrl)
     }

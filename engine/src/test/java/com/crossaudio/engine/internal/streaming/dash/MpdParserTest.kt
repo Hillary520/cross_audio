@@ -64,4 +64,31 @@ class MpdParserTest {
         assertEquals("init.mp4", parsed.representations[0].initializationUrl)
         assertEquals(listOf("seg1.m4s", "seg2.m4s"), parsed.representations[0].segmentUrls)
     }
+
+    @Test
+    fun `parses namespaced representation tags`() {
+        val xml = """
+            <mpd:MPD xmlns:mpd="urn:mpeg:dash:schema:mpd:2011" xmlns:cenc="urn:mpeg:cenc:2013">
+              <mpd:Period>
+                <mpd:AdaptationSet mimeType="audio/mp4">
+                  <mpd:Representation id="a1" bandwidth="128000">
+                    <mpd:BaseURL>audio/</mpd:BaseURL>
+                    <mpd:SegmentList>
+                      <mpd:Initialization sourceURL="init.mp4" />
+                      <mpd:SegmentURL media="seg1.m4s" />
+                    </mpd:SegmentList>
+                  </mpd:Representation>
+                </mpd:AdaptationSet>
+              </mpd:Period>
+            </mpd:MPD>
+        """.trimIndent()
+
+        val parsed = MpdParser.parse(xml)
+
+        assertEquals(1, parsed.representations.size)
+        assertEquals("a1", parsed.representations[0].id)
+        assertEquals("audio/", parsed.representations[0].baseUrl)
+        assertEquals("init.mp4", parsed.representations[0].initializationUrl)
+        assertEquals(listOf("seg1.m4s"), parsed.representations[0].segmentUrls)
+    }
 }

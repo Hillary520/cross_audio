@@ -10,6 +10,7 @@ class HlsMediaParserTest {
         val text = """
             #EXTM3U
             #EXT-X-TARGETDURATION:6
+            #EXT-X-MAP:URI="init.mp4"
             #EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,KEYFORMAT="com.widevine",URI="data:text/plain;base64,AAAABBBB"
             #EXTINF:6.0,
             seg1.ts
@@ -22,6 +23,7 @@ class HlsMediaParserTest {
         assertEquals(6, parsed.targetDurationSec)
         assertEquals(2, parsed.segments.size)
         assertEquals("seg1.ts", parsed.segments[0].uri)
+        assertEquals("init.mp4", parsed.initializationSegmentUri)
         assertEquals("AAAABBBB", parsed.sessionKeyPsshBase64)
     }
 

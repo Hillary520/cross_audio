@@ -11,6 +11,8 @@ internal data class ResolvedManifest(
     val sourceType: SourceType,
     val manifestUri: String,
     val selectedStreamUri: String? = null,
+    val selectedInitializationUri: String? = null,
+    val selectedSegmentUris: List<String> = emptyList(),
     val variantCount: Int = 0,
     val initDataBase64: String? = null,
 )
@@ -57,22 +59,26 @@ internal class ManifestResolver(
                 sourceType = SourceType.HLS,
                 manifestUri = uri,
                 selectedStreamUri = uri,
+                selectedInitializationUri = media.initializationSegmentUri,
+                selectedSegmentUris = media.segments.map { it.uri },
                 variantCount = if (media.segments.isEmpty()) 0 else 1,
                 initDataBase64 = media.sessionKeyPsshBase64,
             )
         }
         val selected = selector.selectHlsVariant(master.variants, qualityCap)
         val absoluteSelected = SegmentTimeline.resolveUri(uri, selected.uri)
-        val initData = runCatching {
+        val selectedMedia = runCatching {
             val selectedMediaText = fetcher.fetchText(absoluteSelected, headers)
-            HlsMediaParser.parse(selectedMediaText).sessionKeyPsshBase64
+            HlsMediaParser.parse(selectedMediaText)
         }.getOrNull()
         return ResolvedManifest(
             sourceType = SourceType.HLS,
             manifestUri = uri,
             selectedStreamUri = absoluteSelected,
+            selectedInitializationUri = selectedMedia?.initializationSegmentUri,
+            selectedSegmentUris = selectedMedia?.segments?.map { it.uri }.orEmpty(),
             variantCount = master.variants.size,
-            initDataBase64 = initData,
+            initDataBase64 = selectedMedia?.sessionKeyPsshBase64,
         )
     }
 
@@ -84,6 +90,8 @@ internal class ManifestResolver(
             sourceType = SourceType.DASH,
             manifestUri = uri,
             selectedStreamUri = selectedUri,
+            selectedInitializationUri = selected?.initializationUrl,
+            selectedSegmentUris = selected?.segmentUrls.orEmpty(),
             variantCount = mpd.representations.size,
             initDataBase64 = mpd.initDataBase64,
         )

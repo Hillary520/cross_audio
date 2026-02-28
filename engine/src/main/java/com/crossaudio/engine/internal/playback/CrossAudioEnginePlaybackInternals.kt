@@ -106,6 +106,15 @@ internal fun CrossAudioEngine.startCurrentTrackImpl(
             qualityInfo = qualityInfo.copy(
                 bitrateKbps = bitrateKbps ?: qualityInfo.bitrateKbps,
             )
+            bitrateKbps?.takeIf { it > 0 }?.let { selected ->
+                emitTelemetry(
+                    EngineTelemetryEvent.AbrDecision(
+                        selectedBitrateKbps = selected,
+                        estimatedBandwidthKbps = selected,
+                        reason = "source_info",
+                    ),
+                )
+            }
             Log.d(tag, "Source info mime=$mimeType bitrateKbps=${bitrateKbps ?: "unknown"}")
         },
         onFormat = onFormat@{ fmt, durUs ->

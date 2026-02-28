@@ -10,6 +10,8 @@ import com.crossaudio.engine.DrmScheme
 import com.crossaudio.engine.EngineTelemetryEvent
 import com.crossaudio.engine.OfflineLicenseResult
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.LockSupport
 
 internal data class ActiveDrmSession(
     val scheme: DrmScheme,
@@ -203,7 +205,7 @@ internal class DrmSessionManager(
     }
 
     fun release() {
-        // Intentionally empty for now.
+        store.close()
     }
 
     companion object {
@@ -238,10 +240,17 @@ internal class DrmSessionManager(
                 if (t is InterruptedException) throw t
                 lastError = t
                 if (attempt < retries) {
-                    Thread.sleep(250L * (attempt + 1))
+                    sleepBackoff(250L * (attempt + 1))
                 }
             }
         }
         throw lastError ?: IllegalStateException("License request failed")
+    }
+
+    private fun sleepBackoff(delayMs: Long) {
+        if (delayMs <= 0L) return
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Interrupted before DRM retry backoff")
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(delayMs.coerceAtMost(3_000L)))
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Interrupted during DRM retry backoff")
     }
 }

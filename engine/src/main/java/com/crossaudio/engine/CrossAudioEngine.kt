@@ -16,6 +16,7 @@ import com.crossaudio.engine.internal.playback.FadeOutSource
 import com.crossaudio.engine.internal.playback.PlaybackCoordinator
 import com.crossaudio.engine.internal.playback.PipeSource
 import com.crossaudio.engine.internal.playback.TransitionController
+import com.crossaudio.engine.internal.telemetry.TelemetryAccumulator
 import android.util.Log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
@@ -110,7 +111,7 @@ class CrossAudioEngine(
         manifestResolver = manifestResolver,
         qualityCapProvider = { qualityCap },
     )
-    internal val drmManager = DrmSessionManager(appContext) { telemetryFlow.tryEmit(it) }
+    internal val drmManager = DrmSessionManager(appContext) { emitTelemetry(it) }
 
     @Volatile internal var streamingConfig: StreamingConfig = StreamingConfig()
     @Volatile internal var qualityCap: QualityCap = QualityCap.AUTO
@@ -118,9 +119,7 @@ class CrossAudioEngine(
     @Volatile internal var currentMimeType: String? = null
     @Volatile private var drmConfig: DrmGlobalConfig = DrmGlobalConfig()
     @Volatile private var audioProcessingConfig: AudioProcessingConfig = AudioProcessingConfig()
-    private val rebufferCount = AtomicInteger(0)
-    private val decoderDrops = AtomicInteger(0)
-    private val drmSessionCount = AtomicInteger(0)
+    private val telemetryAccumulator = TelemetryAccumulator()
 
     internal fun syncQueueFromState() {
         val s = queueState.snapshot()
@@ -198,8 +197,7 @@ class CrossAudioEngine(
             manifestInitDataBase64 = manifestInitDataBase64,
         )
         if (result is OfflineLicenseResult.Success) {
-            telemetryFlow.tryEmit(EngineTelemetryEvent.LicenseAcquired(result.licenseId))
-            drmSessionCount.incrementAndGet()
+            emitTelemetry(EngineTelemetryEvent.LicenseAcquired(result.licenseId))
         }
         return result
     }
@@ -210,11 +208,11 @@ class CrossAudioEngine(
     override fun telemetrySnapshot(): EngineTelemetrySnapshot {
         return EngineTelemetrySnapshot(
             currentBitrateKbps = qualityInfo.bitrateKbps,
-            estimatedBandwidthKbps = null,
-            rebufferCount = rebufferCount.get(),
-            decoderDrops = decoderDrops.get(),
-            drmSessionCount = drmSessionCount.get(),
-            cacheHitRatio = 0f,
+            estimatedBandwidthKbps = telemetryAccumulator.estimatedBandwidthKbps(),
+            rebufferCount = telemetryAccumulator.rebufferCount(),
+            decoderDrops = telemetryAccumulator.decoderDrops(),
+            drmSessionCount = telemetryAccumulator.drmSessionCount(),
+            cacheHitRatio = telemetryAccumulator.cacheHitRatio(),
         )
     }
 
@@ -232,7 +230,10 @@ class CrossAudioEngine(
     private fun maybeStartControlLoop() = maybeStartControlLoopImpl()
     private fun onRendererEnded() = onRendererEndedImpl()
     internal fun rendererUnderrunCount(): Long = rendererUnderrunCountImpl()
-    internal fun emitTelemetry(event: EngineTelemetryEvent) { telemetryFlow.tryEmit(event) }
+    internal fun emitTelemetry(event: EngineTelemetryEvent) {
+        telemetryAccumulator.onEvent(event)
+        telemetryFlow.tryEmit(event)
+    }
     private fun setRendererSource(mode: RenderMode, src: com.crossaudio.engine.internal.playback.RenderSource) = setRendererSourceImpl(mode, src)
     private fun cancelTransitionsSync(cancelPreload: Boolean) = cancelTransitionsSyncImpl(cancelPreload)
     private fun cancelPreloadSync() = cancelPreloadSyncImpl()

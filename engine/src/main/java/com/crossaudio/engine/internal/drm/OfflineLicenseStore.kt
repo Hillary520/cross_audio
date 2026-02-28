@@ -48,6 +48,10 @@ internal class OfflineLicenseStore(context: Context) {
         legacyPrefs.edit().remove(licenseId).apply()
     }
 
+    fun close() {
+        db.close()
+    }
+
     private fun encode(record: OfflineLicenseRecord): String {
         val mediaB64 = Base64.encodeToString(record.mediaKey.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         val groupB64 = Base64.encodeToString(record.groupKey.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)

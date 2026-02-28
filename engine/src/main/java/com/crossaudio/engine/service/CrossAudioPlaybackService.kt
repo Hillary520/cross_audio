@@ -159,11 +159,26 @@ class CrossAudioPlaybackService : Service() {
     }
 
     override fun onBind(intent: Intent): IBinder = Binder(this)
-    fun setQueue(items: List<MediaItem>, startIndex: Int = 0) = engine.setQueue(items, startIndex)
-    fun addToQueue(items: List<MediaItem>, atIndex: Int? = null) = (engine as? QueueMutableEngine)?.addToQueue(items, atIndex)
-    fun removeFromQueue(indices: IntArray) = (engine as? QueueMutableEngine)?.removeFromQueue(indices)
-    fun moveQueueItem(fromIndex: Int, toIndex: Int) = (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
-    fun clearQueue() = (engine as? QueueMutableEngine)?.clearQueue()
+    fun setQueue(items: List<MediaItem>, startIndex: Int = 0) {
+        engine.setQueue(items, startIndex)
+        persistQueueSnapshot()
+    }
+    fun addToQueue(items: List<MediaItem>, atIndex: Int? = null) {
+        (engine as? QueueMutableEngine)?.addToQueue(items, atIndex)
+        persistQueueSnapshot()
+    }
+    fun removeFromQueue(indices: IntArray) {
+        (engine as? QueueMutableEngine)?.removeFromQueue(indices)
+        persistQueueSnapshot()
+    }
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        (engine as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex)
+        persistQueueSnapshot()
+    }
+    fun clearQueue() {
+        (engine as? QueueMutableEngine)?.clearQueue()
+        persistQueueSnapshot()
+    }
     fun queuePlaybackOrder(): IntArray = core.queueState.snapshot().playOrder
     fun skipToIndex(index: Int) = engine.skipToIndex(index)
     fun currentStreamInfo(): StreamInfo = core.currentStreamInfo()
@@ -225,6 +240,9 @@ class CrossAudioPlaybackService : Service() {
     private fun servicePI(action: String): PendingIntent = servicePIImpl(action)
     private fun createNotificationChannel() = createNotificationChannelImpl()
     private fun startForegroundCompat(id: Int, n: Notification) = startForegroundCompatImpl(id, n)
+    private fun persistQueueSnapshot() {
+        CrossAudioBrowseCatalogStore.saveQueue(this, core.queueState.snapshot().items)
+    }
 
     /** Acquire CPU and WiFi WakeLocks to keep playback alive during screen-off. */
     internal fun acquireWakeLocks() {

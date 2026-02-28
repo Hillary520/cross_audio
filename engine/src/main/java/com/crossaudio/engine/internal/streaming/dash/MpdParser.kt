@@ -28,38 +28,38 @@ internal object MpdParser {
                 .newDocumentBuilder()
                 .parse(InputSource(StringReader(xml)))
 
+            val allElements = doc.getElementsByTagName("*")
             if (initDataBase64 == null) {
-                val allNodes = doc.getElementsByTagName("*")
-                for (idx in 0 until allNodes.length) {
-                    val node = allNodes.item(idx)
-                    val name = node.nodeName ?: continue
-                    if (name.endsWith("pssh")) {
-                        val value = node.textContent?.trim()
-                        if (!value.isNullOrEmpty()) {
-                            initDataBase64 = value
-                            break
-                        }
+                for (idx in 0 until allElements.length) {
+                    val node = allElements.item(idx) as? Element ?: continue
+                    if (!node.hasLocalName("pssh")) continue
+                    val value = node.textContent?.trim()
+                    if (!value.isNullOrEmpty()) {
+                        initDataBase64 = value
+                        break
                     }
                 }
             }
 
-            val repNodes = doc.getElementsByTagName("Representation")
-            for (i in 0 until repNodes.length) {
-                val rep = repNodes.item(i) as? Element ?: continue
+            val repElements = mutableListOf<Element>()
+            for (i in 0 until allElements.length) {
+                val el = allElements.item(i) as? Element ?: continue
+                if (el.hasLocalName("Representation")) repElements += el
+            }
+            for ((i, rep) in repElements.withIndex()) {
                 val id = rep.getAttribute("id").ifBlank { "rep_$i" }
                 val bw = rep.getAttribute("bandwidth").toIntOrNull()?.div(1000)?.coerceAtLeast(1) ?: 0
-                val baseUrl = rep.getElementsByTagName("BaseURL")
-                    .item(0)
-                    ?.textContent
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                val initializationUrl = (rep.getElementsByTagName("Initialization").item(0) as? Element)
+                val baseUrl = rep.firstChildTextByLocalName("BaseURL")
+                    ?: (rep.parentNode as? Element)?.firstChildTextByLocalName("BaseURL")
+                    ?: (rep.parentNode?.parentNode as? Element)?.firstChildTextByLocalName("BaseURL")
+                val initializationUrl = rep.firstChildElementByLocalName("Initialization")
                     ?.getAttribute("sourceURL")
                     ?.takeIf { it.isNotBlank() }
                 val segmentUrls = buildList {
-                    val segmentNodes = rep.getElementsByTagName("SegmentURL")
+                    val segmentNodes = rep.getElementsByTagName("*")
                     for (s in 0 until segmentNodes.length) {
                         val seg = segmentNodes.item(s) as? Element ?: continue
+                        if (!seg.hasLocalName("SegmentURL")) continue
                         val media = seg.getAttribute("media").takeIf { it.isNotBlank() } ?: continue
                         add(media)
                     }
@@ -74,5 +74,26 @@ internal object MpdParser {
             }
         }
         return DashManifest(representations = reps, initDataBase64 = initDataBase64)
+    }
+
+    private fun Element.hasLocalName(local: String): Boolean {
+        val ln = this.localName ?: this.nodeName?.substringAfterLast(':') ?: return false
+        return ln.equals(local, ignoreCase = true)
+    }
+
+    private fun Element.firstChildElementByLocalName(local: String): Element? {
+        val nodes = getElementsByTagName("*")
+        for (i in 0 until nodes.length) {
+            val el = nodes.item(i) as? Element ?: continue
+            if (el.hasLocalName(local)) return el
+        }
+        return null
+    }
+
+    private fun Element.firstChildTextByLocalName(local: String): String? {
+        return firstChildElementByLocalName(local)
+            ?.textContent
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 }

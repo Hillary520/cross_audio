@@ -5,6 +5,7 @@ import com.crossaudio.engine.internal.streaming.SegmentRef
 internal data class HlsMediaPlaylist(
     val targetDurationSec: Int,
     val segments: List<SegmentRef>,
+    val initializationSegmentUri: String? = null,
     val sessionKeyPsshBase64: String? = null,
 )
 
@@ -18,12 +19,18 @@ internal object HlsMediaParser {
         var targetDurationSec = 0
         var pendingDurationUs = 0L
         val segments = mutableListOf<SegmentRef>()
+        var initializationSegmentUri: String? = null
         var sessionKeyPsshBase64: String? = null
 
         for (line in lines) {
             when {
                 line.startsWith("#EXT-X-TARGETDURATION:") -> {
                     targetDurationSec = line.substringAfter(':').toIntOrNull() ?: 0
+                }
+                line.startsWith("#EXT-X-MAP:") -> {
+                    if (initializationSegmentUri == null) {
+                        initializationSegmentUri = extractMapUri(line.substringAfter(':'))
+                    }
                 }
                 line.startsWith("#EXT-X-SESSION-KEY:") -> {
                     if (sessionKeyPsshBase64 == null) {
@@ -47,11 +54,26 @@ internal object HlsMediaParser {
         return HlsMediaPlaylist(
             targetDurationSec = targetDurationSec,
             segments = segments,
+            initializationSegmentUri = initializationSegmentUri,
             sessionKeyPsshBase64 = sessionKeyPsshBase64,
         )
     }
 
+    private fun extractMapUri(attrsRaw: String): String? {
+        val attrs = parseAttrs(attrsRaw)
+        return attrs["URI"]?.takeIf { it.isNotBlank() }
+    }
+
     private fun extractPsshBase64(attrsRaw: String): String? {
+        val attrs = parseAttrs(attrsRaw)
+        val uri = attrs["URI"] ?: return null
+        val fromDataUri = uri.substringAfter("base64,", missingDelimiterValue = "")
+            .takeIf { it.isNotBlank() }
+        if (fromDataUri != null) return fromDataUri
+        return attrs["PSSH"]?.takeIf { it.isNotBlank() }
+    }
+
+    private fun parseAttrs(attrsRaw: String): Map<String, String> {
         val attrs = LinkedHashMap<String, String>()
         val regex = Regex("([A-Z0-9-]+)=((\"[^\"]*\")|[^,]*)")
         regex.findAll(attrsRaw).forEach { m ->
@@ -59,10 +81,6 @@ internal object HlsMediaParser {
             val raw = m.groupValues.getOrNull(2).orEmpty()
             if (key.isNotEmpty()) attrs[key] = raw.trim().trim('"')
         }
-        val uri = attrs["URI"] ?: return null
-        val fromDataUri = uri.substringAfter("base64,", missingDelimiterValue = "")
-            .takeIf { it.isNotBlank() }
-        if (fromDataUri != null) return fromDataUri
-        return attrs["PSSH"]?.takeIf { it.isNotBlank() }
+        return attrs
     }
 }
