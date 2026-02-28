@@ -182,7 +182,11 @@ internal fun CrossAudioEngine.startCurrentTrackImpl(
     decoder.start()
 
     scope.launch {
-        kotlinx.coroutines.delay(5_000)
+        val startupTimeoutMs = when (resolved) {
+            is ResolvedMediaSource.RemoteHttp -> 20_000L
+            else -> 7_500L
+        }
+        kotlinx.coroutines.delay(startupTimeoutMs)
         if (activeGeneration == gen && !started && _state.value is PlayerState.Buffering) {
             stop()
             _state.value = PlayerState.Error("Timed out waiting for decoder output format")

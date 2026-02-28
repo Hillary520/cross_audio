@@ -6,4 +6,5 @@ data class StreamInfo(
     val mimeType: String? = null,
     val bitrateKbps: Int? = null,
     val streamId: String? = null,
+    val durationMs: Long? = null,
 )

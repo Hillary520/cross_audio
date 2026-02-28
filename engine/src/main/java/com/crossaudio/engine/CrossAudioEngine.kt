@@ -200,12 +200,14 @@ class CrossAudioEngine(
     override fun currentQuality(): QualityInfo = qualityInfo
     fun currentStreamInfo(): StreamInfo {
         val q = qualityInfo
+        val durationMs = (currentDurationUs / 1_000L).takeIf { it > 0L }
         return StreamInfo(
             sourceType = q.sourceType,
             fileType = inferFileType(currentMimeType, q.representationId),
             mimeType = currentMimeType,
             bitrateKbps = q.bitrateKbps,
             streamId = q.representationId,
+            durationMs = durationMs,
         )
     }
 
