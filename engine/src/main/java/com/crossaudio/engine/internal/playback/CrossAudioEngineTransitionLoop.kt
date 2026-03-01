@@ -29,7 +29,13 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
                 continue
             }
 
-            val item = queue.getOrNull(index) ?: return@launch
+            val item = queue.getOrNull(index)
+            if (item == null) {
+                // Queue/index can be briefly out of sync during concurrent mutations; keep loop alive.
+                syncQueueFromState()
+                kotlinx.coroutines.delay(20)
+                continue
+            }
             val posMs = if (playback.isRunning()) {
                 val framesIntoTrack = (playback.playedFrames() - currentTrackStartFrames).coerceAtLeast(0L)
                 currentBasePositionMs + (framesIntoTrack * 1000L) / fmt.sampleRate.toLong()
@@ -160,7 +166,11 @@ internal fun CrossAudioEngine.maybeStartControlLoopImpl() {
                             }
                             if (crossfadeSource?.isDone() == true) {
                                 val targetIndex = nextQueueIndex
-                                if (targetIndex < 0) return@launch
+                                if (targetIndex < 0) {
+                                    // Defensive: avoid killing the control loop on a transient index race.
+                                    kotlinx.coroutines.delay(20)
+                                    continue
+                                }
                                 Log.d(tag, "Crossfade complete; switching to next track index=$targetIndex snapshot=${debugSnapshotImpl()}")
                                 val bFramesMixed = crossfadeSource?.bFramesMixed() ?: fadeFrames
 
