@@ -135,7 +135,13 @@ internal fun CrossAudioEngine.skipPreviousImpl() {
     val ni = queueState.prevIndexForSkip()
     if (ni == null) {
         Log.d(tag, "skipPrevious no-prev restart-current from=$from posMs=$positionMs")
-        seekToImpl(0L)
+        if (_state.value is PlayerState.Error) {
+            // In error-recovery flow, keep transport behavior consistent with "next":
+            // restart current track and continue playback instead of falling back to paused.
+            restartFromSkippedIndex(shouldPlay = true)
+        } else {
+            seekToImpl(0L)
+        }
         return
     }
     syncQueueFromState()
@@ -176,6 +182,7 @@ private fun CrossAudioEngine.shouldKeepPlayingAfterSkip(): Boolean {
     return when (_state.value) {
         is PlayerState.Playing,
         is PlayerState.Buffering,
+        is PlayerState.Error,
         -> true
         else -> false
     }
