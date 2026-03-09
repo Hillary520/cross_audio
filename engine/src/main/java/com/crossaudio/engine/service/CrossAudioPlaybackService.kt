@@ -187,6 +187,7 @@ class CrossAudioPlaybackService : Service() {
         (engine as? QueueMutableEngine)?.clearQueue()
         persistPlaybackSnapshot(force = true)
     }
+    fun queueItemsSnapshot(): List<MediaItem> = core.queueState.snapshot().items
     fun queuePlaybackOrder(): IntArray = core.queueState.snapshot().playOrder
     fun currentQueueIndex(): Int = core.queueState.snapshot().currentIndex
     fun skipToIndex(index: Int) = engine.skipToIndex(index)
