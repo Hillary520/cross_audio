@@ -190,6 +190,7 @@ class CrossAudioMediaBrowserService : MediaBrowserServiceCompat() {
                     put("artist", item.artist)
                     put("artworkUri", item.artworkUri)
                     put("durationMs", item.durationMs ?: JSONObject.NULL)
+                    put("queueEntryId", item.queueEntryId)
                     put("cacheKey", item.cacheKey)
                     put("cacheGroupKey", item.cacheGroupKey)
                     put("sourceType", item.sourceType.name)

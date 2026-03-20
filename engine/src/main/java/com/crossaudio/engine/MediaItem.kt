@@ -9,6 +9,7 @@ data class MediaItem(
     val artworkUri: String? = null,
     val durationMs: Long? = null,
     val headers: Map<String, String> = emptyMap(),
+    val queueEntryId: String? = null,
     val cacheKey: String? = null,
     val cacheGroupKey: String? = null,
     val sourceType: SourceType = SourceType.AUTO,

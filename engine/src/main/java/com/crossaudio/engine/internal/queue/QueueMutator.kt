@@ -26,6 +26,19 @@ internal object QueueMutator {
             else -> currentIndex
         }
     }
+
+    fun remapOrderForMove(order: IntArray, from: Int, to: Int): IntArray {
+        return IntArray(order.size) { idx -> adjustCurrentForMove(order[idx], from, to) }
+    }
+
+    fun moveOrderEntry(order: IntArray, fromPosition: Int, toPosition: Int): IntArray {
+        if (fromPosition !in order.indices || toPosition !in order.indices) return order
+        if (fromPosition == toPosition) return order
+        val mutable = order.toMutableList()
+        val moved = mutable.removeAt(fromPosition)
+        mutable.add(toPosition, moved)
+        return mutable.toIntArray()
+    }
 }
 
 internal data class RemovalAdjust(

@@ -19,7 +19,10 @@ internal class MediaSourceResolver(
     fun resolve(item: MediaItem): ResolvedMediaSource {
         val scheme = item.uri.scheme?.lowercase()
         if (scheme == "http" || scheme == "https") {
-            val sourceType = manifestResolver.detectSourceType(item)
+            var sourceType = manifestResolver.detectSourceType(item)
+            if (sourceType == SourceType.PROGRESSIVE && item.sourceType == SourceType.AUTO) {
+                sourceType = manifestResolver.sniffSourceType(item) ?: SourceType.PROGRESSIVE
+            }
             if (sourceType != SourceType.PROGRESSIVE) {
                 val estimatedBandwidthKbps = estimatedBandwidthKbpsProvider()
                 val resolvedManifest = runCatching {
@@ -29,6 +32,7 @@ internal class MediaSourceResolver(
                         estimatedBandwidthKbps = estimatedBandwidthKbps,
                         bufferedMs = targetBufferMsProvider().toLong(),
                         startupBitrateKbps = startupBitrateKbpsProvider(),
+                        sourceTypeOverride = sourceType,
                     )
                 }.getOrNull()
                 resolvedManifest?.let { onManifestResolved(item, it, estimatedBandwidthKbps) }

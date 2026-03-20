@@ -97,6 +97,7 @@ internal object CrossAudioBrowseCatalogStore {
                         put("artist", item.artist)
                         put("artworkUri", item.artworkUri)
                         put("durationMs", item.durationMs ?: JSONObject.NULL)
+                        put("queueEntryId", item.queueEntryId)
                         put("cacheKey", item.cacheKey)
                         put("cacheGroupKey", item.cacheGroupKey)
                         put("sourceType", item.sourceType.name)
@@ -121,6 +122,7 @@ internal object CrossAudioBrowseCatalogStore {
                         artworkUri = obj.optString("artworkUri").takeIf { it.isNotBlank() },
                         durationMs = obj.optLong("durationMs").takeIf { it > 0L },
                         headers = obj.optJSONObject("headers")?.toStringMap().orEmpty(),
+                        queueEntryId = obj.optString("queueEntryId").takeIf { it.isNotBlank() },
                         cacheKey = obj.optString("cacheKey").takeIf { it.isNotBlank() },
                         cacheGroupKey = obj.optString("cacheGroupKey").takeIf { it.isNotBlank() },
                         sourceType = runCatching {

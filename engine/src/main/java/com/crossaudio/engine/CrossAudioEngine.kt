@@ -120,9 +120,17 @@ class CrossAudioEngine(
         targetBufferMsProvider = { streamingConfig.targetBufferMs },
         onManifestResolved = onManifestResolved@{ item, manifest, estimatedBandwidthKbps ->
             val activeItem = queue.getOrNull(index)
-            val appliesToActive = activeItem?.uri == item.uri &&
-                activeItem.cacheKey == item.cacheKey &&
-                activeItem.cacheGroupKey == item.cacheGroupKey
+            val appliesToActive = activeItem?.let { active ->
+                val activeQueueEntryId = active.queueEntryId?.takeIf { it.isNotBlank() }
+                val itemQueueEntryId = item.queueEntryId?.takeIf { it.isNotBlank() }
+                if (activeQueueEntryId != null && itemQueueEntryId != null) {
+                    activeQueueEntryId == itemQueueEntryId
+                } else {
+                    active.uri == item.uri &&
+                        active.cacheKey == item.cacheKey &&
+                        active.cacheGroupKey == item.cacheGroupKey
+                }
+            } == true
             if (!appliesToActive) return@onManifestResolved
             val streamUri = manifest.selectedStreamUri
             if (!streamUri.isNullOrBlank()) {

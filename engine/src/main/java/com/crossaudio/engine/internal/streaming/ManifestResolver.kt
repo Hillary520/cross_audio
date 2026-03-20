@@ -32,8 +32,14 @@ internal class ManifestResolver(
         estimatedBandwidthKbps: Int? = null,
         bufferedMs: Long = 0L,
         startupBitrateKbps: Int? = null,
+        sourceTypeOverride: SourceType? = null,
     ): ResolvedManifest {
-        val sourceType = detectSourceType(item)
+        val detectedSourceType = sourceTypeOverride ?: detectSourceType(item)
+        val sourceType = if (detectedSourceType == SourceType.PROGRESSIVE && sourceTypeOverride == null) {
+            sniffSourceType(item) ?: SourceType.PROGRESSIVE
+        } else {
+            detectedSourceType
+        }
         val uri = item.uri.toString()
         if (sourceType == SourceType.PROGRESSIVE) {
             return ResolvedManifest(sourceType = SourceType.PROGRESSIVE, manifestUri = uri)
@@ -64,12 +70,18 @@ internal class ManifestResolver(
 
     fun detectSourceType(item: MediaItem): SourceType {
         if (item.sourceType != SourceType.AUTO) return item.sourceType
-        val path = item.uri.encodedPath?.lowercase().orEmpty()
-        return when {
-            path.endsWith(".m3u8") -> SourceType.HLS
-            path.endsWith(".mpd") -> SourceType.DASH
-            else -> SourceType.PROGRESSIVE
+        return detectSourceTypeFromUrlHints(item.uri.toString()) ?: SourceType.PROGRESSIVE
+    }
+
+    fun sniffSourceType(item: MediaItem): SourceType? {
+        if (item.sourceType != SourceType.AUTO) {
+            return item.sourceType.takeIf { it != SourceType.PROGRESSIVE }
         }
+        detectSourceTypeFromUrlHints(item.uri.toString())?.let { hinted ->
+            if (hinted != SourceType.PROGRESSIVE) return hinted
+        }
+        val probe = runCatching { fetcher.probeSource(item.uri.toString(), item.headers) }.getOrNull() ?: return null
+        return detectSourceTypeFromProbe(probe)
     }
 
     private fun resolveHls(
@@ -171,5 +183,44 @@ internal class ManifestResolver(
             abrReason = abrDecision?.reason ?: if (startupBitrateKbps != null) "startup_hint" else null,
             initDataBase64 = mpd.initDataBase64,
         )
+    }
+
+    private fun detectSourceTypeFromUrlHints(url: String): SourceType? {
+        val normalized = url.trim().lowercase()
+        if (normalized.isEmpty()) return null
+        val path = normalized.substringBefore('?')
+        val query = normalized.substringAfter('?', missingDelimiterValue = "")
+        return when {
+            path.endsWith(".m3u8") || normalized.contains(".m3u8") -> SourceType.HLS
+            path.endsWith(".mpd") || normalized.contains(".mpd") -> SourceType.DASH
+            query.contains("format=m3u8") || query.contains("type=hls") || query.contains("manifest=hls") -> SourceType.HLS
+            query.contains("format=mpd") || query.contains("type=dash") || query.contains("manifest=dash") -> SourceType.DASH
+            else -> null
+        }
+    }
+
+    private fun detectSourceTypeFromProbe(probe: SegmentFetcher.SourceProbe): SourceType? {
+        val contentType = probe.contentType.orEmpty()
+        if (
+            contentType.contains("mpegurl") ||
+            contentType.contains("vnd.apple.mpegurl")
+        ) {
+            return SourceType.HLS
+        }
+        if (
+            contentType.contains("dash+xml") ||
+            contentType.contains("application/dash")
+        ) {
+            return SourceType.DASH
+        }
+
+        val prefix = probe.bodyPrefix
+            .trimStart('\uFEFF', '\u0000', ' ', '\t', '\n', '\r')
+            .lowercase()
+        return when {
+            prefix.startsWith("#extm3u") -> SourceType.HLS
+            prefix.startsWith("<mpd") || prefix.contains("<mpd ") -> SourceType.DASH
+            else -> null
+        }
     }
 }

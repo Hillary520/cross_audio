@@ -1,6 +1,7 @@
 package com.crossaudio.engine.internal.queue
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,5 +22,27 @@ class QueueMutatorTest {
         val r = QueueMutator.adjustCurrentForRemoval(currentIndex = 2, removed = intArrayOf(2), newSize = 4)
         assertTrue(r.removedCurrent)
         assertEquals(2, r.newCurrentIndex)
+    }
+
+    @Test
+    fun remapOrderForMoveKeepsEntriesPointingAtSameItems() {
+        val remapped = QueueMutator.remapOrderForMove(
+            order = intArrayOf(1, 3, 0, 2),
+            from = 1,
+            to = 2,
+        )
+
+        assertArrayEquals(intArrayOf(2, 3, 0, 1), remapped)
+    }
+
+    @Test
+    fun moveOrderEntryMovesVisiblePlaybackPosition() {
+        val reordered = QueueMutator.moveOrderEntry(
+            order = intArrayOf(2, 3, 0, 1),
+            fromPosition = 0,
+            toPosition = 3,
+        )
+
+        assertArrayEquals(intArrayOf(3, 0, 1, 2), reordered)
     }
 }

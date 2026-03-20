@@ -40,6 +40,7 @@ internal fun CrossAudioPlaybackService.parseItemsImpl(intent: Intent): List<Medi
                                 artworkUri = obj.optNullableString("artworkUri"),
                                 durationMs = obj.optNullableLong("durationMs"),
                                 headers = headers,
+                                queueEntryId = obj.optNullableString("queueEntryId"),
                                 cacheKey = obj.optNullableString("cacheKey"),
                                 cacheGroupKey = obj.optNullableString("cacheGroupKey"),
                                 sourceType = sourceType,

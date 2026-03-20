@@ -100,10 +100,20 @@ internal class QueueState {
     fun moveQueueItem(from: Int, to: Int): Boolean = synchronized(lock) {
         if (from !in items.indices || to !in items.indices) return@synchronized false
         if (from == to) return@synchronized true
+        val previousOrder = playOrder.copyOf()
+        val previousFromCursor = previousOrder.indexOf(from)
+        val previousToCursor = previousOrder.indexOf(to)
         val item = items.removeAt(from)
         items.add(to, item)
         currentIndex = QueueMutator.adjustCurrentForMove(currentIndex, from, to)
-        rebuildOrder()
+        if (!shuffleEnabled || !isValidPlayOrder(previousOrder, items.size) || previousFromCursor < 0 || previousToCursor < 0) {
+            rebuildOrder()
+            return@synchronized true
+        }
+
+        val remapped = QueueMutator.remapOrderForMove(previousOrder, from, to)
+        playOrder = QueueMutator.moveOrderEntry(remapped, previousFromCursor, previousToCursor)
+        orderCursor = playOrder.indexOf(currentIndex).coerceAtLeast(0)
         true
     }
 
