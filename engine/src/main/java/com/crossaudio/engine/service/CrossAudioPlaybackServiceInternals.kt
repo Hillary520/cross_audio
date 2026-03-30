@@ -305,10 +305,7 @@ private fun CrossAudioPlaybackService.activeItemForState(st: PlayerState): Media
         is PlayerState.Paused -> st.item.also { sessionItem = it }
         is PlayerState.Ended -> st.item.also { sessionItem = it }
         is PlayerState.Buffering -> sessionItem
-        is PlayerState.Error -> {
-            sessionItem = null
-            null
-        }
+        is PlayerState.Error -> sessionItem
         PlayerState.Idle -> {
             sessionItem = null
             null
