@@ -116,6 +116,7 @@ class PlatformPlayerEngine(
     override fun setQueue(items: List<MediaItem>, startIndex: Int) = delegate.setQueue(items, startIndex)
 
     override fun addToQueue(items: List<MediaItem>, atIndex: Int?) { (delegate as? QueueMutableEngine)?.addToQueue(items, atIndex) }
+    override fun addNextToQueue(items: List<MediaItem>) { (delegate as? QueueMutableEngine)?.addNextToQueue(items) }
     override fun removeFromQueue(indices: IntArray) { (delegate as? QueueMutableEngine)?.removeFromQueue(indices) }
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) { (delegate as? QueueMutableEngine)?.moveQueueItem(fromIndex, toIndex) }
     override fun clearQueue() { (delegate as? QueueMutableEngine)?.clearQueue() }

@@ -22,6 +22,13 @@ internal fun CrossAudioEngine.addToQueueImpl(items: List<MediaItem>, atIndex: In
     emitQueueChanged()
 }
 
+internal fun CrossAudioEngine.addNextToQueueImpl(items: List<MediaItem>) {
+    queueState.addNextToQueue(items)
+    syncQueueFromState()
+    Log.d(tag, "addNextToQueue added=${items.size} size=${queue.size} currentIndex=$index")
+    emitQueueChanged()
+}
+
 internal fun CrossAudioEngine.removeFromQueueImpl(indices: IntArray) {
     val wasPlaying = _state.value is PlayerState.Playing
     val result = queueState.removeFromQueue(indices)

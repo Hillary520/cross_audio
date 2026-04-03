@@ -178,6 +178,7 @@ class CrossAudioEngine(
     internal fun emitQueueChanged() { emitter.queueChanged(queue.size, index, shuffleEnabled) }
     override fun setQueue(items: List<MediaItem>, startIndex: Int) { setQueueImpl(items, startIndex) }
     override fun addToQueue(items: List<MediaItem>, atIndex: Int?) { addToQueueImpl(items, atIndex) }
+    override fun addNextToQueue(items: List<MediaItem>) { addNextToQueueImpl(items) }
     override fun removeFromQueue(indices: IntArray) { removeFromQueueImpl(indices) }
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) { moveQueueItemImpl(fromIndex, toIndex) }
     override fun clearQueue() { clearQueueImpl() }

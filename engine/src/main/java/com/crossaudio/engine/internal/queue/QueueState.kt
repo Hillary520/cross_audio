@@ -43,9 +43,29 @@ internal class QueueState {
     }
 
     fun addToQueue(additions: List<MediaItem>, atIndex: Int?) = synchronized(lock) {
-        if (additions.isEmpty()) return@synchronized
-        val insertAt = (atIndex ?: items.size).coerceIn(0, items.size)
+        insertInternal(
+            additions = additions,
+            insertAt = (atIndex ?: items.size).coerceIn(0, items.size),
+            playNext = false,
+        )
+    }
+
+    fun addNextToQueue(additions: List<MediaItem>) = synchronized(lock) {
+        val insertAt = if (currentIndex < 0) items.size else (currentIndex + 1).coerceAtMost(items.size)
+        insertInternal(
+            additions = additions,
+            insertAt = insertAt,
+            playNext = true,
+        )
+    }
+
+    private fun insertInternal(
+        additions: List<MediaItem>,
+        insertAt: Int,
+        playNext: Boolean,
+    ) {
         val previousSize = items.size
+        if (additions.isEmpty()) return
         items.addAll(insertAt, additions)
         if (currentIndex < 0) {
             currentIndex = 0
@@ -54,18 +74,18 @@ internal class QueueState {
         }
         if (!shuffleEnabled || !isValidPlayOrder(playOrder, previousSize)) {
             rebuildOrder()
-            return@synchronized
+            return
         }
 
-        // Keep existing shuffled order stable. Explicit insertion is treated as
-        // "play next" semantics in shuffled playback and is placed right after
-        // the current cursor. Plain append keeps random order at the tail.
+        // Keep existing shuffled order stable. Canonical inserts randomize new
+        // entries at the tail; explicit "play next" inserts after the current
+        // cursor without disturbing the remaining order.
         val shiftedExisting = IntArray(playOrder.size) { orderIdx ->
             val idx = playOrder[orderIdx]
             if (idx >= insertAt) idx + additions.size else idx
         }
         val newIndices = IntArray(additions.size) { insertAt + it }
-        playOrder = if (atIndex == null) {
+        playOrder = if (!playNext) {
             val randomized = newIndices.toMutableList()
             randomized.shuffle(Random(System.nanoTime()))
             shiftedExisting + randomized.toIntArray()

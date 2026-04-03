@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface QueueMutableEngine {
     fun addToQueue(items: List<MediaItem>, atIndex: Int? = null)
+    fun addNextToQueue(items: List<MediaItem>)
     fun removeFromQueue(indices: IntArray)
     fun moveQueueItem(fromIndex: Int, toIndex: Int)
     fun clearQueue()

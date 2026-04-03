@@ -174,6 +174,10 @@ class CrossAudioPlaybackService : Service() {
         (engine as? QueueMutableEngine)?.addToQueue(items, atIndex)
         persistPlaybackSnapshot(force = true)
     }
+    fun addNextToQueue(items: List<MediaItem>) {
+        (engine as? QueueMutableEngine)?.addNextToQueue(items)
+        persistPlaybackSnapshot(force = true)
+    }
     fun removeFromQueue(indices: IntArray) {
         (engine as? QueueMutableEngine)?.removeFromQueue(indices)
         persistPlaybackSnapshot(force = true)
