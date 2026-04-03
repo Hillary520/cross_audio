@@ -32,6 +32,40 @@ internal class QueueState {
         rebuildOrder()
     }
 
+    fun restoreSnapshot(
+        newItems: List<MediaItem>,
+        startIndex: Int,
+        mode: RepeatMode,
+        shuffle: Boolean,
+        savedOrder: IntArray,
+        savedCursor: Int,
+    ) = synchronized(lock) {
+        items.clear()
+        items.addAll(newItems)
+        currentIndex = if (items.isEmpty()) -1 else startIndex.coerceIn(0, items.lastIndex)
+        repeatMode = mode
+        shuffleEnabled = shuffle
+
+        if (items.isEmpty()) {
+            playOrder = intArrayOf()
+            orderCursor = 0
+            return@synchronized
+        }
+
+        if (shuffleEnabled && isValidPlayOrder(savedOrder, items.size)) {
+            playOrder = savedOrder.copyOf()
+            val currentCursor = playOrder.indexOf(currentIndex)
+            orderCursor = when {
+                savedCursor in playOrder.indices && playOrder[savedCursor] == currentIndex -> savedCursor
+                currentCursor >= 0 -> currentCursor
+                else -> 0
+            }
+            return@synchronized
+        }
+
+        rebuildOrder()
+    }
+
     fun setRepeatMode(mode: RepeatMode) = synchronized(lock) {
         repeatMode = mode
     }
@@ -46,7 +80,7 @@ internal class QueueState {
         insertInternal(
             additions = additions,
             insertAt = (atIndex ?: items.size).coerceIn(0, items.size),
-            playNext = false,
+            playbackOrderIndex = null,
         )
     }
 
@@ -55,14 +89,22 @@ internal class QueueState {
         insertInternal(
             additions = additions,
             insertAt = insertAt,
-            playNext = true,
+            playbackOrderIndex = (orderCursor + 1).coerceIn(0, playOrder.size),
+        )
+    }
+
+    fun insertQueueItems(additions: List<MediaItem>, atIndex: Int, playbackOrderIndex: Int?) = synchronized(lock) {
+        insertInternal(
+            additions = additions,
+            insertAt = atIndex.coerceIn(0, items.size),
+            playbackOrderIndex = playbackOrderIndex?.coerceIn(0, playOrder.size),
         )
     }
 
     private fun insertInternal(
         additions: List<MediaItem>,
         insertAt: Int,
-        playNext: Boolean,
+        playbackOrderIndex: Int?,
     ) {
         val previousSize = items.size
         if (additions.isEmpty()) return
@@ -85,12 +127,12 @@ internal class QueueState {
             if (idx >= insertAt) idx + additions.size else idx
         }
         val newIndices = IntArray(additions.size) { insertAt + it }
-        playOrder = if (!playNext) {
+        playOrder = if (playbackOrderIndex == null) {
             val randomized = newIndices.toMutableList()
             randomized.shuffle(Random(System.nanoTime()))
             shiftedExisting + randomized.toIntArray()
         } else {
-            val insertCursor = (orderCursor + 1).coerceIn(0, shiftedExisting.size)
+            val insertCursor = playbackOrderIndex.coerceIn(0, shiftedExisting.size)
             IntArray(shiftedExisting.size + newIndices.size) { orderIdx ->
                 when {
                     orderIdx < insertCursor -> shiftedExisting[orderIdx]
@@ -134,6 +176,15 @@ internal class QueueState {
         val remapped = QueueMutator.remapOrderForMove(previousOrder, from, to)
         playOrder = QueueMutator.moveOrderEntry(remapped, previousFromCursor, previousToCursor)
         orderCursor = playOrder.indexOf(currentIndex).coerceAtLeast(0)
+        true
+    }
+
+    fun replaceQueueItem(index: Int, item: MediaItem): Boolean = synchronized(lock) {
+        if (index !in items.indices) return@synchronized false
+        items[index] = item
+        if (!isValidPlayOrder(playOrder, items.size)) {
+            rebuildOrder()
+        }
         true
     }
 

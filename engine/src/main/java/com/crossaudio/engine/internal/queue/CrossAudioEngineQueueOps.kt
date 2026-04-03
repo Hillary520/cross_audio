@@ -29,6 +29,21 @@ internal fun CrossAudioEngine.addNextToQueueImpl(items: List<MediaItem>) {
     emitQueueChanged()
 }
 
+internal fun CrossAudioEngine.insertQueueItemsImpl(items: List<MediaItem>, atIndex: Int, playbackOrderIndex: Int?) {
+    queueState.insertQueueItems(items, atIndex, playbackOrderIndex)
+    syncQueueFromState()
+    Log.d(tag, "insertQueueItems added=${items.size} atIndex=$atIndex playbackOrderIndex=$playbackOrderIndex size=${queue.size} currentIndex=$index")
+    emitQueueChanged()
+}
+
+internal fun CrossAudioEngine.replaceQueueItemImpl(index: Int, item: MediaItem) {
+    if (!queueState.replaceQueueItem(index, item)) return
+    cancelTransitionsSyncImpl(cancelPreload = true)
+    syncQueueFromState()
+    Log.d(tag, "replaceQueueItem index=$index currentIndex=${this.index}")
+    emitQueueChanged()
+}
+
 internal fun CrossAudioEngine.removeFromQueueImpl(indices: IntArray) {
     val wasPlaying = _state.value is PlayerState.Playing
     val result = queueState.removeFromQueue(indices)
@@ -74,6 +89,33 @@ internal fun CrossAudioEngine.clearQueueImpl() {
     syncQueueFromState()
     stopInternalImpl(updateState = false)
     _state.value = PlayerState.Idle
+    emitQueueChanged()
+}
+
+internal fun CrossAudioEngine.restoreQueueSnapshotImpl(
+    items: List<MediaItem>,
+    currentIndex: Int,
+    repeatMode: RepeatMode,
+    shuffleEnabled: Boolean,
+    playOrder: IntArray,
+    orderCursor: Int,
+) {
+    queueState.restoreSnapshot(
+        newItems = items,
+        startIndex = currentIndex,
+        mode = repeatMode,
+        shuffle = shuffleEnabled,
+        savedOrder = playOrder,
+        savedCursor = orderCursor,
+    )
+    syncQueueFromState()
+    Log.d(tag, "restoreQueueSnapshot size=${queue.size} currentIndex=$index shuffle=$shuffleEnabled repeat=$repeatMode")
+    stop()
+    _state.value = if (items.isEmpty()) {
+        PlayerState.Idle
+    } else {
+        PlayerState.Paused(queue[index], positionMs = 0L)
+    }
     emitQueueChanged()
 }
 

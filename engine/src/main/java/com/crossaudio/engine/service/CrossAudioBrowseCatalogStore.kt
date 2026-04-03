@@ -3,6 +3,7 @@ package com.crossaudio.engine.service
 import android.content.Context
 import com.crossaudio.engine.MediaItem
 import com.crossaudio.engine.QualityHint
+import com.crossaudio.engine.RepeatMode
 import com.crossaudio.engine.SourceType
 import org.json.JSONArray
 import org.json.JSONObject
@@ -35,6 +36,10 @@ internal object CrossAudioBrowseCatalogStore {
         items: List<MediaItem>,
         currentIndex: Int,
         positionMs: Long,
+        shuffleEnabled: Boolean,
+        repeatMode: RepeatMode,
+        playOrder: IntArray,
+        orderCursor: Int,
     ) {
         if (items.isEmpty() || currentIndex !in items.indices) {
             clearPlaybackSnapshot(context)
@@ -43,6 +48,10 @@ internal object CrossAudioBrowseCatalogStore {
         val payload = JSONObject().apply {
             put("currentIndex", currentIndex)
             put("positionMs", positionMs.coerceAtLeast(0L))
+            put("shuffleEnabled", shuffleEnabled)
+            put("repeatMode", repeatMode.name)
+            put("playOrder", JSONArray(playOrder.toList()))
+            put("orderCursor", orderCursor)
             put("items", serializeItems(items))
             put("savedAtEpochMs", System.currentTimeMillis())
         }
@@ -71,10 +80,21 @@ internal object CrossAudioBrowseCatalogStore {
             if (items.isEmpty()) return@runCatching null
             val currentIndex = obj.optInt("currentIndex", 0).coerceIn(0, items.lastIndex)
             val positionMs = obj.optLong("positionMs", 0L).coerceAtLeast(0L)
+            val shuffleEnabled = obj.optBoolean("shuffleEnabled", false)
+            val repeatMode = runCatching {
+                RepeatMode.valueOf(obj.optString("repeatMode", RepeatMode.OFF.name))
+            }.getOrDefault(RepeatMode.OFF)
+            val playOrderJson = obj.optJSONArray("playOrder") ?: JSONArray()
+            val playOrder = IntArray(playOrderJson.length()) { idx -> playOrderJson.optInt(idx, idx) }
+            val orderCursor = obj.optInt("orderCursor", playOrder.indexOf(currentIndex).coerceAtLeast(0))
             PlaybackSnapshot(
                 items = items,
                 currentIndex = currentIndex,
                 positionMs = positionMs,
+                shuffleEnabled = shuffleEnabled,
+                repeatMode = repeatMode,
+                playOrder = playOrder,
+                orderCursor = orderCursor,
             )
         }.getOrNull()
     }
@@ -122,7 +142,8 @@ internal object CrossAudioBrowseCatalogStore {
                         artworkUri = obj.optString("artworkUri").takeIf { it.isNotBlank() },
                         durationMs = obj.optLong("durationMs").takeIf { it > 0L },
                         headers = obj.optJSONObject("headers")?.toStringMap().orEmpty(),
-                        queueEntryId = obj.optString("queueEntryId").takeIf { it.isNotBlank() },
+                        queueEntryId = obj.optString("queueEntryId").takeIf { it.isNotBlank() }
+                            ?: "restored:$i:${uri.hashCode()}",
                         cacheKey = obj.optString("cacheKey").takeIf { it.isNotBlank() },
                         cacheGroupKey = obj.optString("cacheGroupKey").takeIf { it.isNotBlank() },
                         sourceType = runCatching {
@@ -151,5 +172,9 @@ internal object CrossAudioBrowseCatalogStore {
         val items: List<MediaItem>,
         val currentIndex: Int,
         val positionMs: Long,
+        val shuffleEnabled: Boolean = false,
+        val repeatMode: RepeatMode = RepeatMode.OFF,
+        val playOrder: IntArray = intArrayOf(),
+        val orderCursor: Int = 0,
     )
 }

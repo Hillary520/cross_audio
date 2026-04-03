@@ -175,10 +175,21 @@ class CrossAudioEngine(
         val s = queueState.snapshot()
         queue = s.items; index = s.currentIndex; repeatMode = s.repeatMode; shuffleEnabled = s.shuffleEnabled
     }
-    internal fun emitQueueChanged() { emitter.queueChanged(queue.size, index, shuffleEnabled) }
+    internal fun emitQueueChanged() {
+        val snapshot = queueState.snapshot()
+        emitter.queueChanged(
+            items = snapshot.items,
+            playOrder = snapshot.playOrder,
+            size = snapshot.items.size,
+            currentIndex = snapshot.currentIndex,
+            shuffleEnabled = snapshot.shuffleEnabled,
+            repeatMode = snapshot.repeatMode,
+        )
+    }
     override fun setQueue(items: List<MediaItem>, startIndex: Int) { setQueueImpl(items, startIndex) }
     override fun addToQueue(items: List<MediaItem>, atIndex: Int?) { addToQueueImpl(items, atIndex) }
     override fun addNextToQueue(items: List<MediaItem>) { addNextToQueueImpl(items) }
+    override fun replaceQueueItem(index: Int, item: MediaItem) { replaceQueueItemImpl(index, item) }
     override fun removeFromQueue(indices: IntArray) { removeFromQueueImpl(indices) }
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) { moveQueueItemImpl(fromIndex, toIndex) }
     override fun clearQueue() { clearQueueImpl() }
@@ -192,7 +203,12 @@ class CrossAudioEngine(
     override fun skipPrevious() { skipPreviousImpl() }
     override fun skipToIndex(index: Int) { skipToIndexImpl(index) }
     override fun setCrossfadeDurationMs(durationMs: Long) { crossfadeDurationMs.set(durationMs.coerceAtLeast(0L)) }
-    override fun setRepeatMode(mode: RepeatMode) { queueState.setRepeatMode(mode); syncQueueFromState(); repeatMode = mode }
+    override fun setRepeatMode(mode: RepeatMode) {
+        queueState.setRepeatMode(mode)
+        syncQueueFromState()
+        repeatMode = mode
+        emitQueueChanged()
+    }
     override fun setCrossfadeDebugPanning(enabled: Boolean) { debugCrossfadePan = enabled; Log.d(tag, "Debug crossfade pan set: $enabled") }
     override fun setCrossfadeHeadroom(headroom: Float) { crossfadeHeadroom = headroom.coerceIn(0.5f, 1.0f); Log.d(tag, "Crossfade headroom set: $crossfadeHeadroom") }
     override fun setVolume(volume: Float) { val v = volume.coerceIn(0f, 1f); this.volume = v; playback.setVolume(v) }

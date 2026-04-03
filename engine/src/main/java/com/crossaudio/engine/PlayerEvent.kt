@@ -8,9 +8,12 @@ sealed class PlayerEvent {
     ) : PlayerEvent()
 
     data class QueueChanged(
+        val items: List<MediaItem>,
+        val playOrder: IntArray,
         val size: Int,
         val currentIndex: Int,
         val shuffleEnabled: Boolean,
+        val repeatMode: RepeatMode,
     ) : PlayerEvent()
 
     data class ShuffleChanged(val enabled: Boolean) : PlayerEvent()

@@ -1,14 +1,32 @@
 package com.crossaudio.engine.internal.events
 
 import com.crossaudio.engine.CacheState
+import com.crossaudio.engine.MediaItem
 import com.crossaudio.engine.PlayerEvent
+import com.crossaudio.engine.RepeatMode
 import com.crossaudio.engine.TrackTransitionReason
 
 internal class EventEmitter(
     private val bus: EventBus,
 ) {
-    fun queueChanged(size: Int, currentIndex: Int, shuffleEnabled: Boolean) {
-        bus.emit(PlayerEvent.QueueChanged(size, currentIndex, shuffleEnabled))
+    fun queueChanged(
+        items: List<MediaItem>,
+        playOrder: IntArray,
+        size: Int,
+        currentIndex: Int,
+        shuffleEnabled: Boolean,
+        repeatMode: RepeatMode,
+    ) {
+        bus.emit(
+            PlayerEvent.QueueChanged(
+                items = items,
+                playOrder = playOrder,
+                size = size,
+                currentIndex = currentIndex,
+                shuffleEnabled = shuffleEnabled,
+                repeatMode = repeatMode,
+            ),
+        )
     }
 
     fun shuffleChanged(enabled: Boolean) {

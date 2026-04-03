@@ -35,9 +35,12 @@ import com.crossaudio.engine.OfflineLicenseResult
 import com.crossaudio.engine.PlayerState
 import com.crossaudio.engine.QualityCap
 import com.crossaudio.engine.QueueMutableEngine
+import com.crossaudio.engine.RepeatMode
 import com.crossaudio.engine.ShuffleEngine
 import com.crossaudio.engine.StreamInfo
 import com.crossaudio.engine.StreamingConfig
+import com.crossaudio.engine.insertQueueItemsImpl
+import com.crossaudio.engine.restoreQueueSnapshotImpl
 import com.crossaudio.engine.platform.PlatformPlayerEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -178,6 +181,33 @@ class CrossAudioPlaybackService : Service() {
         (engine as? QueueMutableEngine)?.addNextToQueue(items)
         persistPlaybackSnapshot(force = true)
     }
+    fun insertQueueItems(items: List<MediaItem>, atIndex: Int, playbackOrderIndex: Int?) {
+        core.insertQueueItemsImpl(items, atIndex, playbackOrderIndex)
+        persistPlaybackSnapshot(force = true)
+    }
+    fun replaceQueueItem(index: Int, item: MediaItem) {
+        (engine as? QueueMutableEngine)?.replaceQueueItem(index, item)
+        persistPlaybackSnapshot(force = true)
+    }
+    fun restoreQueueSnapshot(
+        items: List<MediaItem>,
+        currentIndex: Int,
+        repeatMode: RepeatMode,
+        shuffleEnabled: Boolean,
+        playOrder: IntArray,
+        orderCursor: Int,
+    ) {
+        clearPendingResume()
+        core.restoreQueueSnapshotImpl(
+            items = items,
+            currentIndex = currentIndex,
+            repeatMode = repeatMode,
+            shuffleEnabled = shuffleEnabled,
+            playOrder = playOrder,
+            orderCursor = orderCursor,
+        )
+        persistPlaybackSnapshot(force = true)
+    }
     fun removeFromQueue(indices: IntArray) {
         (engine as? QueueMutableEngine)?.removeFromQueue(indices)
         persistPlaybackSnapshot(force = true)
@@ -260,7 +290,14 @@ class CrossAudioPlaybackService : Service() {
         if (current.items.isNotEmpty()) return false
         val snapshot = CrossAudioBrowseCatalogStore.loadPlaybackSnapshot(this) ?: return false
         if (snapshot.items.isEmpty() || snapshot.currentIndex !in snapshot.items.indices) return false
-        engine.setQueue(snapshot.items, snapshot.currentIndex)
+        core.restoreQueueSnapshotImpl(
+            items = snapshot.items,
+            currentIndex = snapshot.currentIndex,
+            repeatMode = snapshot.repeatMode,
+            shuffleEnabled = snapshot.shuffleEnabled,
+            playOrder = snapshot.playOrder,
+            orderCursor = snapshot.orderCursor,
+        )
         pendingResumeIndex = snapshot.currentIndex
         pendingResumePositionMs = snapshot.positionMs.coerceAtLeast(0L)
         return true
@@ -312,6 +349,10 @@ class CrossAudioPlaybackService : Service() {
             items = queueSnapshot.items,
             currentIndex = queueSnapshot.currentIndex,
             positionMs = snapshotPos,
+            shuffleEnabled = queueSnapshot.shuffleEnabled,
+            repeatMode = queueSnapshot.repeatMode,
+            playOrder = queueSnapshot.playOrder,
+            orderCursor = queueSnapshot.orderCursor,
         )
     }
 
